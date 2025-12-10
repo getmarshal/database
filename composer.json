@@ -1,0 +1,20 @@
+{
+    "name": "marshal/database",
+    "description": "Database package for Marshal",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "autoload": {
+        "psr-4": {
+            "Marshal\\Database\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Collins Pamba",
+            "email": "collinspamba@outlook.com"
+        }
+    ],
+    "require": {
+        "doctrine/dbal": "^4.4"
+    }
+}
