@@ -2,17 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Utils\Database\Schema;
+namespace Marshal\Database;
 
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Types\Type as DBALType;
-use Marshal\ContentManager\Content;
 
 final class Property
 {
     private bool $autoIncrement = false;
     /**
-     * @var array<PropertyConstraint>
+     * @var array<string, PropertyConstraint>
      */
     private array $constraints = [];
     private bool $convertToPhpType = true;
@@ -29,13 +28,21 @@ final class Property
     private int $precision = 10;
     private PropertyRelation $relation;
     private int $scale = 0;
+    private DBALType $type;
+    private string $typeName;
     private bool $unsigned = false;
     private array $validators = [];
     private mixed $value = null;
 
-    public function __construct(private string $identifier, private array $definition)
-    {
+    public function __construct(
+        private readonly string $identifier,
+        array $definition,
+        ?PropertyRelation $relation = null
+    ) {
         $this->prepareFromDefinition($definition);
+        if (null !== $relation) {
+            $this->relation = $relation;
+        }
     }
 
     public function isAutoIncrement(): bool
@@ -55,22 +62,22 @@ final class Property
 
     public function getDatabaseType(): DBALType
     {
-        return DBALType::getType($this->definition['type']);
+        return $this->type;
     }
 
     public function getDatabaseTypeName(): string
     {
-        return $this->definition['type'];
+        return $this->typeName;
     }
 
     public function getDatabaseValue(AbstractPlatform $databasePlatform): mixed
     {
         if (! $this->hasRelation()) {
-            return $this->getDatabaseType()->convertToDatabaseValue($this->value, $databasePlatform);
+            return $this->getDatabaseType()->convertToDatabaseValue($this->getValue(), $databasePlatform);
         }
 
         $relation = $this->getValue();
-        if (! $relation instanceof Content) {
+        if (! $relation instanceof Type) {
             if (
                 \is_array($relation)
                 && isset($relation[$this->getRelationColumn()])
@@ -87,7 +94,7 @@ final class Property
 
     public function getDefaultValue(): mixed
     {
-        return $this->definition['default'] ?? null;
+        return $this->default;
     }
 
     public function getFilters(): array
@@ -151,7 +158,7 @@ final class Property
 
     public function getRelationProperty(): Property
     {
-        return $this->getRelation()->getProperty();
+        return $this->getRelation()->getRelationProperty();
     }
 
     public function getRelationColumn(): string
@@ -181,6 +188,10 @@ final class Property
 
     public function getValue(): mixed
     {
+        if ($this->hasRelation()) {
+            return $this->getRelation()->getRelationType();
+        }
+
         return $this->value;
     }
 
@@ -204,14 +215,45 @@ final class Property
         return isset($this->constraints['unique']) && $this->constraints['unique'] instanceof PropertyConstraint;
     }
 
+    public function hydrate(mixed $value, ?AbstractPlatform $databasePlatform = NULL): void
+    {
+        if ($this->hasRelation()) {
+            if (\is_array($value)) {
+                $propertyData = [];
+                $relationContentTable = $this->getRelation()->getTable();
+                foreach ($value as $k => $v) {
+                    $propertyData["{$relationContentTable}__$k"] = $v;
+                }
+                $this->getRelation()->getRelationType()->hydrate(
+                    $propertyData,
+                    $databasePlatform,
+                    $this->getRelation()->getAlias()
+                );
+            } elseif (\is_int($value)) {
+                $this->getRelation()->getRelationType()->getAutoIncrement()->setValue($value);
+            } elseif ($value instanceof self) {
+                $this->getRelation()->getRelationProperty()->setValue($value);
+            }
+        }
+
+        NULL === $databasePlatform || TRUE !== $this->getConvertToPhpType()
+            ? $this->setValue($value)
+            : $this->setValue(
+                $this->getDatabaseType()->convertToPHPValue($value, $databasePlatform)
+            );
+    }
+
     public function prepareFromDefinition(array $definition): void
     {
+        // @todo validate $definition items in PropertyConfigValidator
+        isset($definition['type']) && $this->type = DBALType::getType($definition['type']);
+        isset($definition['type']) && $this->typeName = $definition['type'];
         isset($definition['label']) && $this->label = $definition['label'];
         isset($definition['name']) && $this->name = $definition['name'];
+        isset($definition['default']) && $this->default = $definition['default'];
         isset($definition['description']) && $this->description = $definition['description'];
         isset($definition['autoincrement']) && $this->autoIncrement = \boolval($definition['autoincrement']);
         isset($definition['notnull']) && $this->notNull = \boolval($definition['notnull']);
-        isset($definition['default']) && $this->value = $definition['default'];
         isset($definition['platformOptions']) && $this->platformOptions = (array) $definition['platformOptions'];
         isset($definition['fixed']) && $this->fixed = \boolval($definition['fixed']);
         isset($definition['length']) && \is_int($definition['length']) && $this->length = $definition['length'];
@@ -220,7 +262,6 @@ final class Property
         isset($definition['unsigned']) && $this->unsigned = \boolval($definition['unsigned']);
         isset($definition['scale']) && $this->scale = \intval($definition['scale']);
         isset($definition['convertToPhpType']) && \is_bool($definition['convertToPhpType']) && $this->convertToPhpType = $definition['convertToPhpType'];
-        isset($definition['relation']) && $definition['relation'] instanceof PropertyRelation && $this->relation = $definition['relation'];
         isset($definition['index']) && (\is_array($definition['index']) || \is_bool($definition['index'])) && $this->index = new PropertyIndex($definition['index']);
 
         // setup constraints

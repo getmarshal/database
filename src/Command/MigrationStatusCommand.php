@@ -2,23 +2,21 @@
 
 declare(strict_types= 1);
 
-namespace Marshal\Utils\Database\Migration;
+namespace Marshal\Database\Command;
 
-use Marshal\Utils\Database\DatabaseAwareInterface;
-use Marshal\Utils\Database\DatabaseAwareTrait;
-use Psr\Container\ContainerInterface;
+use Marshal\Database\DatabaseManager;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-final class MigrationStatusCommand extends Command implements DatabaseAwareInterface
+final class MigrationStatusCommand extends Command
 {
-    use DatabaseAwareTrait;
+    public const string COMMAND_NAME = "migration:status";
 
-    public function __construct(protected ContainerInterface $container, string $name)
+    public function __construct()
     {
-        parent::__construct($name);
+        parent::__construct(self::COMMAND_NAME);
     }
 
     public function configure(): void
@@ -34,7 +32,7 @@ final class MigrationStatusCommand extends Command implements DatabaseAwareInter
 
         // read migrations status
         try {
-            $connection = $this->getDatabaseConnection();
+            $connection = DatabaseManager::getConnection();
         } catch (\Throwable $e) {
             $io->error("Error connecting to database");
             $io->error($e->getMessage());

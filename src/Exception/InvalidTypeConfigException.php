@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Utils\Database\Exception;
+namespace Marshal\Database\Exception;
 
 class InvalidTypeConfigException extends \InvalidArgumentException
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Utils\Database\Schema;
+namespace Marshal\Database;
 
 final class PropertyConstraint
 {

@@ -2,30 +2,23 @@
 
 declare(strict_types= 1);
 
-namespace Marshal\Utils\Database\Migration;
+namespace Marshal\Database\Command;
 
 use Doctrine\DBAL\Schema\SchemaDiff;
-use Marshal\EventManager\EventDispatcherAwareInterface;
-use Marshal\EventManager\EventDispatcherAwareTrait;
-use Marshal\Utils\Database\DatabaseAwareInterface;
-use Marshal\Utils\Database\DatabaseAwareTrait;
-use Psr\Container\ContainerInterface;
+use Marshal\Database\DatabaseManager;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-final class MigrationRunCommand extends Command implements DatabaseAwareInterface, EventDispatcherAwareInterface
+final class RunMigrationCommand extends Command
 {
-    use DatabaseAwareTrait;
-    use EventDispatcherAwareTrait;
-
     public const string COMMAND_NAME = "migration:run";
 
-    public function __construct(protected ContainerInterface $container, string $name)
+    public function __construct()
     {
-        parent::__construct($name);
+        parent::__construct(self::COMMAND_NAME);
     }
 
     public function configure(): void
@@ -50,7 +43,7 @@ final class MigrationRunCommand extends Command implements DatabaseAwareInterfac
         $name = $input->getOption('name');
 
         // get the migration
-        $connection = $this->getDatabaseConnection();
+        $connection = DatabaseManager::getConnection();
         $queryBuilder = $connection->createQueryBuilder();
         $migration = $queryBuilder
             ->select('m.*')
@@ -75,7 +68,7 @@ final class MigrationRunCommand extends Command implements DatabaseAwareInterfac
         }
 
         try {
-            $dbConnection = $this->getDatabaseConnection($migration['db']);
+            $dbConnection = DatabaseManager::getConnection($migration['db']);
         } catch (\Throwable $e) {
             $io->error($e->getMessage());
             return Command::FAILURE;

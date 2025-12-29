@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Utils\Database\Exception;
+namespace Marshal\Database\Exception;
 
 class InvalidPropertyConfigException extends \InvalidArgumentException
 {
     public function __construct(string $name, array $messages)
     {
         parent::__construct(\sprintf(
-            "Invalid content config %s: %s",
+            "Invalid property config %s: %s",
             $name,
             \implode(', ', $messages)
         ));

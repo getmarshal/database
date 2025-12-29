@@ -2,27 +2,25 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Utils\Database\Migration;
+namespace Marshal\Database\Command;
 
-use Doctrine\DBAL\Schema\SchemaDiff;
-use Marshal\Utils\Database\DatabaseAwareInterface;
-use Marshal\Utils\Database\DatabaseAwareTrait;
-use Marshal\Utils\Database\Schema\SchemaManager;
-use Psr\Container\ContainerInterface;
+use Marshal\Database\Event\GenerateMigrationEvent;
+use Marshal\Database\Event\SaveMigrationEvent;
+use Marshal\Utils\Database\DatabaseManager;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-class MigrationGenerateCommand extends Command implements DatabaseAwareInterface
+class GenerateMigrationCommand extends Command
 {
-    use DatabaseAwareTrait;
-    use MigrationCommandTrait;
+    public const string COMMAND_NAME = "migration:generate";
 
-    public function __construct(protected ContainerInterface $container, string $name)
+    public function __construct(private EventDispatcherInterface $eventDispatcher, private array $schemaConfig)
     {
-        parent::__construct($name);
+        parent::__construct(self::COMMAND_NAME);
     }
 
     public function configure(): void
@@ -40,10 +38,13 @@ class MigrationGenerateCommand extends Command implements DatabaseAwareInterface
         $database = $input->getOption('database');
         $io = new SymfonyStyle($input, $output);
 
-        // get migration
+        // generate the migration migration
+        $event = new GenerateMigrationEvent($database);
         try {
-            $diff = $this->generateMigration($database);
+            $this->eventDispatcher->dispatch($event);
+            $diff = $event->getSchemaDiff();
         } catch (\Throwable $e) {
+            $io->error("Error generating migration");
             $io->error($e->getMessage());
             return Command::FAILURE;
         }
@@ -54,7 +55,7 @@ class MigrationGenerateCommand extends Command implements DatabaseAwareInterface
         }
 
         // print statements
-        $connection = $this->getDatabaseConnection($database);
+        $connection = DatabaseManager::getConnection($database);
         $statements = $connection->getDatabasePlatform()->getAlterSchemaSQL($diff);
         $io->info("This migration will generate the following statements:");
         $io->info($statements);
@@ -73,45 +74,16 @@ class MigrationGenerateCommand extends Command implements DatabaseAwareInterface
         // normalize the name
         $normalizedName = $this->normalizeMigrationName($name);
 
-        // save migration
-        $queryBuilder = $this->getDatabaseConnection()->createQueryBuilder();
-        $save = $queryBuilder->insert('migration')
-            ->setValue('name', $queryBuilder->createNamedParameter($normalizedName))
-            ->setValue('db', $queryBuilder->createNamedParameter($database))
-            ->setValue('diff', $queryBuilder->createNamedParameter(\serialize($diff)))
-            ->setValue('created_at', $queryBuilder->createNamedParameter(new \DateTime))
-            ->executeStatement();
-        if (empty($save)) {
+        // save the migration
+        $saveEvent = new SaveMigrationEvent($normalizedName, $database, $diff);
+        $this->eventDispatcher->dispatch($saveEvent);
+        if ($saveEvent->getIsSuccess() === FALSE) {
             $io->error("Could not save migration");
             return Command::FAILURE;
         }
 
         $io->success("Migration $normalizedName generated");
         return Command::SUCCESS;
-    }
-
-    private function generateMigration(string $database): SchemaDiff
-    {
-        // gather the definitions
-        $definitions = [];
-        $config =  $this->container->get('config')['schema']['types'] ?? [];
-        $typeManager = $this->container->get(SchemaManager::class);
-        \assert($typeManager instanceof SchemaManager);
-
-        foreach (\array_keys($config) as $name) {
-            $nameSplit = \explode('::', $name);
-            if ($nameSplit[0] !== $database) {
-                continue;
-            }
-
-            $definitions[] = $typeManager->get($name);
-        }
-
-        // generate the schema diff
-        $dbalSchema = $this->getDatabaseConnection($database)->createSchemaManager();
-        $fromSchema = $dbalSchema->introspectSchema();
-        $toSchema = $this->buildContentSchema($definitions);
-        return $dbalSchema->createComparator()->compareSchemas($fromSchema, $toSchema);
     }
 
     private function normalizeMigrationName(string $name): string

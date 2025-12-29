@@ -2,21 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Utils\Database\Schema;
+namespace Marshal\Database;
 
 final class PropertyRelation
 {
     private const array UPDATE_DELETE_OPTIONS = ['CASCADE', 'SET NULL'];
-    private Property $relatedProperty;
 
-    public function __construct(private Type $relation, private array $config)
+    private Type $relation;
+
+    public function __construct(private readonly array $config)
     {
-        $this->relatedProperty = $relation->getPropertyByIdentifier($config['property']);
+        $this->relation = TypeManager::get($config['type']);
     }
 
     public function getAlias(): string
     {
-        return $this->config['alias'] ?? $this->getType()->getTable();
+        return $this->config['alias'] ?? $this->getTable();
     }
 
     public function getOnDelete(): string
@@ -51,13 +52,31 @@ final class PropertyRelation
         return $this->config['onUpdate'];
     }
 
-    public function getProperty(): Property
+    public function getRelationProperty(): Property
     {
-        return $this->relatedProperty;
+        return $this->relation->getProperty($this->config['property']);
     }
 
-    public function getType(): Type
+    public function getRelationType(): Type
     {
         return $this->relation;
+    }
+
+    public function getRelationIdentifier(): string
+    {
+        return $this->relation->getIdentifier();
+    }
+
+    /**
+     * @return array<string, Property>
+     */
+    public function getRelationProperties(): array
+    {
+        return $this->relation->getProperties();
+    }
+
+    public function getTable(): string
+    {
+        return $this->relation->getTable();
     }
 }
