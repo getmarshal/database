@@ -6,8 +6,6 @@ namespace Marshal\Database;
 
 final class ConfigProvider
 {
-    public const string DEFAULT_DATABASE = "database::default";
-
     public function __invoke(): array
     {
         return [
@@ -16,7 +14,7 @@ final class ConfigProvider
             "events" => $this->getEventListeners(),
             "filters" => [],
             "input_filters" => [],
-            "validators" => $this->getValidatorsConfig(),
+            "validators" => [],
         ];
     }
 
@@ -28,20 +26,6 @@ final class ConfigProvider
             Command\RollbackMigrationCommand::COMMAND_NAME => Command\RollbackMigrationCommand::class,
             Command\RunMigrationCommand::COMMAND_NAME => Command\RunMigrationCommand::class,
             Command\SetupMigrationsCommand::COMMAND_NAME => Command\SetupMigrationsCommand::class,
-        ];
-    }
-
-    private function getDatabaseConfig(): array
-    {
-        return [
-            self::DEFAULT_DATABASE => [
-                "driver" => "pdo_sqlite",
-                "driverOptions" => [
-                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                ],
-                "path" => __DIR__ . "/../data/marshal.sqlite",
-            ],
         ];
     }
 
@@ -79,16 +63,6 @@ final class ConfigProvider
                         "listener" => "onSetupMigrationsEvent",
                     ],
                 ],
-            ],
-        ];
-    }
-
-    private function getValidatorsConfig(): array
-    {
-        return [
-            "factories" => [
-                Validator\PropertyConfigValidator::class => Validator\PropertyConfigValidatorFactory::class,
-                Validator\TypeConfigValidator::class => Validator\TypeConfigValidatorFactory::class,
             ],
         ];
     }

@@ -14,8 +14,7 @@ final class Where
         private readonly string $identifier,
         private readonly mixed $value,
         private null|string|array $relations = null,
-        private readonly string $expression = Query::MOD_EQ,
-        private bool $byName = FALSE
+        private readonly string $expression = Query::MOD_EQ
     ) {
         if (! \in_array($expression, $this->getAllowedExpressions(), true)) {
             throw new \InvalidArgumentException("Expression type $expression not allowed");
@@ -79,17 +78,6 @@ final class Where
         return $this->property;
     }
 
-    public function getRelation(): Type
-    {
-        if ($this->type->isRelationProperty($this->identifier)) {
-            return $this->type->getProperty($this->identifier)
-                ->getRelation()
-                ->getRelationType();
-        }
-
-        return $this->type;
-    }
-
     public function getValue(): mixed
     {
         if ($this->isRaw() && \is_array($this->value)) {
@@ -121,13 +109,7 @@ final class Where
         }
 
         if (! $this->type->hasProperty($this->identifier)) {
-            if (FALSE === $this->byName) {
-                return TRUE;
-            }
-
-            if (! $this->type->hasPropertyByName($this->identifier)) {
-                return TRUE;
-            }
+            return TRUE;
         }
 
         return FALSE;
@@ -156,17 +138,9 @@ final class Where
         }
 
         if (! $this->type->hasProperty($this->identifier)) {
-            if (FALSE === $this->byName) {
-                throw new \InvalidArgumentException("Property $this->identifier not found in type");
-            }
-
-            if (! $this->type->hasPropertyByName($this->identifier)) {
-                throw new \InvalidArgumentException("Property not found in type");
-            }
-
-            $this->property = $this->type->getPropertyByName($this->identifier);
-        } else {
-            $this->property = $this->type->getProperty($this->identifier);
+            throw new \InvalidArgumentException("Property not found in type");
         }
+
+        $this->property = $this->type->getProperty($this->identifier);
     }
 }

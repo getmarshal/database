@@ -18,7 +18,7 @@ final class TypeInputHydrator
     {
         $data = [];
         foreach ($input as $key => $value) {
-            if ($type->hasPropertyByName($key)) {
+            if ($type->hasProperty($key)) {
                 $data["{$type->getTable()}__$key"] = $this->normalizeValue($value);
             }
         }

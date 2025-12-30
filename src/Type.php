@@ -85,25 +85,14 @@ class Type
 
     public function getProperty(string $identifier): Property
     {
-        if (! $this->hasProperty($identifier)) {
-            throw new \InvalidArgumentException(
-                \sprintf("Property %s does not exist in %s", $identifier, $this->getName())
-            );
-        }
-        
-        return $this->properties[$identifier];
-    }
-
-    public function getPropertyByName(string $name): Property
-    {
         foreach ($this->getProperties() as $property) {
-            if ($name === $property->getName()) {
+            if ($identifier === $property->getIdentifier() || $identifier === $property->getName()) {
                 return $property;
             }
         }
         
         throw new \InvalidArgumentException(
-            \sprintf("Property %s does not exist in content type %s", $name, $this->getName())
+            \sprintf("Property %s does not exist in type: %s", $identifier, $this->getName())
         );
     }
 
@@ -139,17 +128,12 @@ class Type
 
     public function hasProperty(string $identifier): bool
     {
-        return isset($this->properties[$identifier]);
-    }
-
-    public function hasPropertyByName(string $name): bool
-    {
         foreach ($this->getProperties() as $property) {
-            if ($name === $property->getName()) {
+            if ($identifier === $property->getIdentifier() || $identifier === $property->getName()) {
                 return TRUE;
             }
         }
-
+        
         return FALSE;
     }
 
@@ -165,19 +149,19 @@ class Type
         foreach ($data as $key => $values) {
             if ($key === $this->getTable() || NULL !== $alias && $key === $alias) {
                 foreach ($values as $name => $value) {
-                    if (! $this->hasPropertyByName($name)) {
+                    if (! $this->hasProperty($name)) {
                         continue;
                     }
 
-                    $property = $this->getPropertyByName($name);
+                    $property = $this->getProperty($name);
                     $property->hydrate($value, $databasePlatform);
                 }
             } else {
-                if (! $this->hasPropertyByName($key)) {
+                if (! $this->hasProperty($key)) {
                     continue;
                 }
 
-                $property = $this->getPropertyByName($key);
+                $property = $this->getProperty($key);
                 if (! $property->hasRelation()) {
                     continue;
                 }
@@ -226,9 +210,20 @@ class Type
         return $this;
     }
 
-    public function setValidationGroup(array $validationGroup, bool $byName = false): static
+    public function setValidationGroup(array $validationGroup): static
     {
-        $this->validationGroup = $validationGroup;
+        foreach ($validationGroup as $key => $value) {
+            if (! \is_string($key)) {
+                continue;
+            }
+            
+            if (! $this->hasProperty($key)) {
+                continue;
+            }
+
+            $this->validationGroup[$key] = $value;
+        }
+
         return $this;
     }
 
@@ -247,9 +242,49 @@ class Type
 
     public function isValid(string $operation): bool
     {
-        $filterManager = new FilterPluginManager(new ServiceManager(), ['dependencies' => Config::get('filters')]);
-        $validatorManager = new ValidatorPluginManager(new ServiceManager(), ['dependencies' => Config::get('validators')]);
+        // create our validator plugin manager
+        $validatorManager = new ValidatorPluginManager(
+            new ServiceManager(),
+            ['dependencies' => Config::get('validators')]
+        );
+
+        // validate individual properties
+        $inputFilter = $this->getPropertiesInputFilter($validatorManager);
+        if (! $inputFilter->setData($this->toArray())->isValid()) {
+            foreach ($inputFilter->getMessages() as $key => $message) {
+                $this->validationMessages[$key] = $message;
+            }
+        }
+
+        // chain type level validators
+        $chain = $validatorManager->get(ValidatorChain::class);
+        \assert($chain instanceof ValidatorChain);
+        foreach ($this->getValidators() as $validator => $options) {
+            $options['__operation'] = $operation;
+            $chain->attach(
+                $validatorManager->get($validator, $options),
+                $options['break_chain_on_failure'] ?? false,
+                $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
+            );
+        }
+
+        // validate the type
+        if (! $chain->isValid($inputFilter->getValues())) {
+            foreach ($chain->getMessages() as $key => $message) {
+                $this->validationMessages[$key] = $message;
+            }
+        }
+        
+        return empty($this->validationMessages);
+    }
+
+    private function getPropertiesInputFilter(ValidatorPluginManager $validatorPluginManager): InputFilter
+    {
         $inputFilter = new InputFilter();
+        $filterPluginManager = new FilterPluginManager(
+            new ServiceManager(),
+            ['dependencies' => Config::get('filters')]
+        );
         foreach ($this->getProperties() as $property) {
             if ($property->isAutoIncrement()) {
                 continue;
@@ -261,14 +296,14 @@ class Type
             // add property filters and validators
             foreach ($property->getFilters() as $filter => $options) {
                 $input->getFilterChain()->attach(
-                    $filterManager->build($filter, $options),
+                    $filterPluginManager->get($filter, $options),
                     $options['priority'] ?? FilterChain::DEFAULT_PRIORITY
                 );
             }
 
             foreach ($property->getValidators() as $validator => $options) {
                 $input->getValidatorChain()->attach(
-                    $validatorManager->build($validator, $options),
+                    $validatorPluginManager->get($validator, $options),
                     $options['break_chain_on_failure'] ?? FALSE,
                     $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
                 );
@@ -283,34 +318,12 @@ class Type
             $inputFilter->add($input);
         }
 
+        // set a validation group, if any
         if (! empty($this->validationGroup)) {
             $inputFilter->setValidationGroup($this->validationGroup);
         }
 
-        if (! $inputFilter->setData($this->toArray())->isValid()) {
-            foreach ($inputFilter->getMessages() as $key => $message) {
-                $this->validationMessages[$key] = $message;
-            }
-        }
-
-        $chain = $validatorManager->get(ValidatorChain::class);
-        \assert($chain instanceof ValidatorChain);
-        foreach ($this->getValidators() as $validator => $options) {
-            $options['__operation'] = $operation;
-            $chain->attach(
-                $validatorManager->get($validator, $options),
-                $options['break_chain_on_failure'] ?? false,
-                $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
-            );
-        }
-
-        if (! $chain->isValid($inputFilter->getValues())) {
-            foreach ($chain->getMessages() as $key => $message) {
-                $this->validationMessages[$key] = $message;
-            }
-        }
-        
-        return empty($this->validationMessages);
+        return $inputFilter;
     }
 
     private function normalizeData(array $result): array

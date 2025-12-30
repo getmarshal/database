@@ -7,7 +7,7 @@ namespace Marshal\Database\Command;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 
-final class DatabaseMigrationSetupCommandFactory
+final class SetupMigrationsCommandFactory
 {
     public function __invoke(ContainerInterface $container): SetupMigrationsCommand
     {

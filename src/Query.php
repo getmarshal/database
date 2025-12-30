@@ -10,7 +10,7 @@ use loophp\collection\Collection;
 use Marshal\Database\Hydrator\TypeInputHydrator;
 use Marshal\Utils\Logger\LoggerManager;
 
-class Query
+final class Query
 {
     public const string MOD_EQ = "eq";
     public const string MOD_GT = "gt";
@@ -29,7 +29,8 @@ class Query
     public const string OP_UPDATE = "update";
     public const string OP_DELETE = "delete";
 
-    private array $columns = [];
+    private ?string $countDistinct = null;
+    private array $distinct = [];
     private array $excludeRelations = [];
     private Type $type;
     private ?AbstractPlatform $databasePlatform = null;
@@ -39,6 +40,7 @@ class Query
     private ?int $limit = null;
     private int $offset = 0;
     private array $orderBy = [];
+    private array $properties = [];
     private string $schema;
     private bool $toArray = false;
     private array $validationGroup = [];
@@ -48,6 +50,17 @@ class Query
     public function __construct(string $type)
     {
         $this->type = TypeManager::get($type);
+    }
+
+    public function countDistinct(string $property): static
+    {
+        if (! $this->type->hasProperty($property)) {
+            return $this;
+        }
+
+        $column = $this->type->getProperty($property)->getName();
+        $this->countDistinct = "COUNT(DISTINCT $column) AS count";
+        return $this;
     }
 
     public function create(?Type $type = null): Type
@@ -63,14 +76,19 @@ class Query
         }
 
         // execute the query
-        $query = $this->prepareQuery(self::OP_CREATE);
-        $result = $query->executeStatement();
+        try {
+            $query = $this->prepareQuery(self::OP_CREATE);
+            $result = $query->executeStatement();
+        } catch (\Throwable $e) {
+            throw new Exception\DatabaseQueryException($e);
+        }
+
+        // check the result
         if (! \is_numeric($result) || \intval($result) == 0) {
-            LoggerManager::get()->error("Error creating content", [
+            LoggerManager::get()->error("Content not created", [
                 'sql' => $query->getSQL(),
                 'parameters' => $query->getParameters(),
             ]);
-            throw new \RuntimeException("Could not create type");
         }
         
         return $this->type;
@@ -82,6 +100,12 @@ class Query
         \var_dump($query->getSQL());
         \xdebug_var_dump($query->getParameters());
         return false;
+    }
+
+    public function distinct(string $property): static
+    {
+        $this->distinct[] = $property;
+        return $this;
     }
 
     public function excludeRelations(string|array $relations): static {
@@ -100,12 +124,18 @@ class Query
     public function fetch(): Type
     {
         $query = $this->prepareQuery(self::OP_FETCH);
-        // \var_dump($query->getSQL());
-        // xdebug_var_dump($query->getParameters());
-        // return $this->type;
-        $result = $query->setMaxResults(1)
-            ->executeQuery()
-            ->fetchAssociative();
+        try {
+            $result = $query->setMaxResults(1)
+                ->executeQuery()
+                ->fetchAssociative();
+        } catch (\Throwable $e) {
+            LoggerManager::get()->error($e->getMessage(), [
+                'sql' => $query->getSQL(),
+                'params' => $query->getParameters(),
+            ]);
+            return $this->type;
+        }
+
         if (! empty($result)) {
             $this->type->hydrate($result, $this->databasePlatform);
         }
@@ -116,9 +146,6 @@ class Query
     public function fetchAll(): Collection
     {
         $query = $this->prepareQuery(self::OP_FETCH);
-        // \var_dump($query->getSQL());
-        // xdebug_var_dump($query->getParameters());
-        // return Collection::empty();
         try {
             $iterable = $query->setFirstResult($this->offset)
                 ->setMaxResults($this->limit)
@@ -145,9 +172,38 @@ class Query
         });
     }
 
-    public function getType(): Type
+    public function fetchAllLazy(): Collection
     {
-        return $this->type;
+        $query = $this->prepareQuery(self::OP_FETCH);
+        try {
+            $iterable = $query->setFirstResult($this->offset)
+                ->setMaxResults($this->limit)
+                ->executeQuery()
+                ->iterateAssociative();
+        } catch (\Throwable $e) {
+            LoggerManager::get()->error($e->getMessage(), [
+                'sql' => $query->getSQL(),
+                'params' => $query->getParameters(),
+            ]);
+            return Collection::empty();
+        }
+
+        $contentType = $this->type;
+        $platform = $this->databasePlatform;
+        $toArray = $this->toArray;
+
+        return Collection::fromCallable(static function () use ($iterable, $toArray, $contentType, $platform): \Generator {
+            foreach ($iterable as $row) {
+                yield $toArray
+                    ? $contentType->hydrate($row, $platform)->toArray()
+                    : $contentType->hydrate($row, $platform);
+            }
+        });
+    }
+
+    public function getQuery(string $operation): QueryBuilder
+    {
+        return $this->prepareQuery($operation);
     }
 
     public function groupBy(string $groupBy): static
@@ -156,7 +212,7 @@ class Query
         return $this;
     }
 
-    public function hydrateRelations(bool|array $relations): static
+    public function relations(bool|array $relations = true): static
     {
         $this->hydrateRelations = $relations;        
         return $this;
@@ -174,15 +230,70 @@ class Query
         return $this;
     }
 
-    public function orderBy(string $property, string $direction = "asc", ?string $relationProperty = null): static
+    public function orderBy(string $propertyOrSchema, string $direction = "asc", ?string $relationProperty = null): static
     {
-        // $this->orderBy[$relation ?? $this->type->getIdentifier()][$property] = $direction;
+        // normalize the column name
+        if ($this->type->hasProperty($propertyOrSchema)) {
+            $property = $this->type->getProperty($propertyOrSchema);
+            if (null === $relationProperty) {
+                $column = "{$this->type->getTable()}.{$property->getName()}";
+                $this->orderBy[$column] = $direction;
+                return $this;
+            }
+
+            if (! $property->hasRelation()) {
+                LoggerManager::get()->warning("Invalid order by property");
+                return $this;
+            }
+
+            $relationType = $property->getRelation()->getRelationType();
+            if (! $relationType->hasProperty($relationProperty)) {
+                LoggerManager::get()->warning("Invalid order by property");
+                return $this;
+            }
+
+            $relationAlias = $property->getRelation()->getAlias();
+            $relationProperty = $relationType->getProperty($relationProperty);
+            $column = "{$relationAlias}.{$relationProperty->getName()}";
+            $this->orderBy[$column] = $direction;
+            return $this;
+
+        } else {
+            // try a schema
+            foreach ($this->type->getProperties() as $property) {
+                if (! $property->hasRelation()) {
+                    continue;
+                }
+
+                if ($property->getRelation()->getRelationIdentifier() !== $propertyOrSchema) {
+                    continue;
+                }
+
+                $relation = $property->getRelation()->getRelationType();
+                $relationAlias = $property->getRelation()->getAlias();
+                if (null !== $relationProperty) {
+                    if (! $relation->hasProperty($relationProperty)) {
+                        LoggerManager::get()->warning("Invalid order by relation property");
+                        return $this;
+                    }
+                    $propertyName = $relation->getProperty($relationProperty)->getName();
+                    $column = "{$relationAlias}.{$propertyName}";
+                    $this->orderBy[$column] = $direction;
+                    return $this;
+                }
+
+                $column = "{$relationAlias}.{$relation->getAutoIncrement()->getName()}";
+                $this->orderBy[$column] = $direction;
+                return $this;
+            }
+        }
+
         return $this;
     }
 
-    public function properties(string $schema, array $columns): static
+    public function properties(string $schema, array $properties): static
     {
-        $this->columns[$schema] = $columns;
+        $this->properties[$schema] = $properties;
         return $this;
     }
 
@@ -214,14 +325,14 @@ class Query
             throw new \InvalidArgumentException("Nothing to update");
         }
 
+        // get a hydrated type
         $hydrator = new TypeInputHydrator();
-
-        // validate properties being updated
-        // @todo figure if values is multiple or single item
         $hydrated = null === $type
             ? $hydrator->hydrate($this->type, $this->values)
             : $hydrator->hydrate($type, $this->values);
-        $hydrated->setValidationGroup(\array_keys($this->validationGroup));
+
+        // validate properties being updated
+        $hydrated->setValidationGroup($this->values);
         if (! $hydrated->isValid(self::OP_UPDATE)) {
             throw new Exception\InvalidInputException($hydrated->getValidationMessages());
         }
@@ -238,11 +349,10 @@ class Query
         
         $result = $query->executeStatement();
         if (! \is_numeric($result) || \intval($result) == 0) {
-            LoggerManager::get()->error("Error creating content", [
+            LoggerManager::get()->info("No updates by: ", [
                 'sql' => $query->getSQL(),
                 'parameters' => $query->getParameters(),
             ]);
-            throw new \RuntimeException("Could not update type");
         }
 
         return $hydrated;
@@ -261,10 +371,9 @@ class Query
         string $identifier,
         mixed $value,
         null|string|array $relations = null,
-        string $expression = self::MOD_EQ,
-        bool $byName = FALSE
+        string $expression = self::MOD_EQ
     ): static {
-        $this->where[] = new Where($this->type, $identifier, $value, $relations, $expression, $byName);
+        $this->where[] = new Where($this->type, $identifier, $value, $relations, $expression);
         return $this;
     }
 
@@ -274,11 +383,6 @@ class Query
             // @todo
         }
         return $this;
-    }
-
-    public static function from(string $schema): self
-    {
-        return new self($schema);
     }
 
     public static function schema(string $schema): self
@@ -427,11 +531,11 @@ class Query
                 $queryBuilder->update($this->type->getTable());
                 $this->applyWhereExpressions($queryBuilder);
                 foreach ($this->values as $name => $value) {
-                    if (! $this->type->hasPropertyByName($name)) {
+                    if (! $this->type->hasProperty($name)) {
                         continue;
                     }
 
-                    $property = $this->type->getPropertyByName($name);
+                    $property = $this->type->getProperty($name);
                     $queryBuilder->set(
                         $property->getName(),
                         $queryBuilder->createNamedParameter(
@@ -448,6 +552,11 @@ class Query
 
     private function applyRelations(Type $content, QueryBuilder $queryBuilder): void
     {
+        if (null !== $this->countDistinct) {
+            $queryBuilder->select($this->countDistinct);
+            return;
+        }
+
         if (FALSE === $this->hydrateRelations) {
             // local properties only
             $this->hydrateLocalProperties($queryBuilder, $content);
@@ -468,7 +577,7 @@ class Query
             // raw queries
             if ($where->isRaw()) {
                 $value = $where->getValue();
-                // $queryBuilder->andWhere($where->getColumn());
+                $queryBuilder->andWhere($where->getColumn());
                 if (\is_array($value)) {
                     foreach ($value as $k => $v) {
                         $queryBuilder->setParameter($k, $v);
@@ -523,13 +632,7 @@ class Query
             }
 
             if (! \in_array($property->getIdentifier(), $relations, true)) {
-                // $this->joinRelation($queryBuilder, $property, $type->getTable());
-                $queryBuilder->leftJoin(
-                    fromAlias: $this->type->getTable(),
-                    join: $property->getRelation()->getTable(),
-                    alias: $property->getRelation()->getAlias(),
-                    condition: $type->getTable() . '.' . $property->getName() . '=' . $property->getName() . '.' . $property->getRelationProperty()->getName()
-                );
+                $this->joinRelation($queryBuilder, $property, $type->getTable());
                 $relations[] = $property->getIdentifier();
             }
 
@@ -548,13 +651,7 @@ class Query
                     $duplicates[] = $innerRelationAlias . '__' . $innerProperty->getName();
 
                     if  (! \in_array($innerProperty->getIdentifier(), $relations, true)) {
-                        // $this->joinRelation($queryBuilder, $innerProperty, $property->getRelation()->getAlias());
-                        $queryBuilder->leftJoin(
-                            fromAlias: $this->type->getTable(),
-                            join: $innerProperty->getRelation()->getTable(),
-                            alias: $innerRelationAlias,
-                            condition: $property->getRelation()->getAlias() . '.' . $innerProperty->getName() . '=' . $innerProperty->getName() . '.' . $innerProperty->getRelationProperty()->getName()
-                        );
+                        $this->joinRelation($queryBuilder, $innerProperty, $property->getRelation()->getAlias());
                         $relations[] = $innerProperty->getIdentifier();
                     }
 
