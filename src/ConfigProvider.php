@@ -10,6 +10,7 @@ final class ConfigProvider
     {
         return [
             "commands" => $this->getCommands(),
+            "database_expressions" => $this->getExpressions(),
             "dependencies" => $this->getDependencies(),
             "events" => $this->getEventListeners(),
             "filters" => [],
@@ -63,6 +64,22 @@ final class ConfigProvider
                         "listener" => "onSetupMigrationsEvent",
                     ],
                 ],
+            ],
+        ];
+    }
+
+    private function getExpressions(): array
+    {
+        return [
+            "where" => [
+                \Marshal\Database\Query::WHERE_EQ => Query\Operator\Eq::class,
+                \Marshal\Database\Query::WHERE_GT => Query\Operator\Gt::class,
+                \Marshal\Database\Query::WHERE_GTE => Query\Operator\Gte::class,
+                \Marshal\Database\Query::WHERE_INARRAY => Query\Operator\InArray::class,
+                \Marshal\Database\Query::WHERE_ISNULL => Query\Operator\IsNull::class,
+                \Marshal\Database\Query::WHERE_LT => Query\Operator\Lt::class,
+                \Marshal\Database\Query::WHERE_LTE => Query\Operator\Lte::class,
+                \Marshal\Database\Query::WHERE_RAW => Query\Operator\Raw::class,
             ],
         ];
     }

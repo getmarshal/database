@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Marshal\Database;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Marshal\Utils\Config;
 
@@ -44,6 +43,11 @@ final class DatabaseManager
                     $firstConnect = true;
                 }
             }
+        }
+
+        // wrap the connection
+        if (! isset($config[$database]["wrapperClass"])) {
+            $config[$database]["wrapperClass"] = Connection::class;
         }
         
         // get the connection

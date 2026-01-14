@@ -4,32 +4,17 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Hydrator;
 
-use Marshal\Database\Type;
+use Marshal\Database\Schema\Type;
 
 final class TypeInputHydrator
 {
-    public function hydrate(Type $type, array $input): Type
+    public function hydrate(Type $type, array $input): void
     {
-        $type->hydrate($this->normalizeInput($type, $input));
-        return $type;
-    }
-
-    private function normalizeInput(Type $type, array $input): array
-    {
-        $data = [];
         foreach ($input as $key => $value) {
-            if ($type->hasProperty($key)) {
-                $data["{$type->getTable()}__$key"] = $this->normalizeValue($value);
+            if (! $type->hasProperty($key)) {
+                continue;
             }
+            $type->getProperty($key)->setValue($value);
         }
-
-        return $data;
-    }
-
-    private function normalizeValue(mixed $value): mixed
-    {
-        return $value instanceof Type
-            ? $value->getAutoIncrement()->getValue()
-            : $value;
     }
 }

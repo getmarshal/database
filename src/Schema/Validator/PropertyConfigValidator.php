@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Validator;
+namespace Marshal\Database\Schema\Validator;
 
 use Laminas\Validator\AbstractValidator;
 use Doctrine\DBAL\Types\Type;

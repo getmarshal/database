@@ -2,9 +2,8 @@
 
 declare(strict_types= 1);
 
-namespace Marshal\Database;
+namespace Marshal\Database\Schema;
 
-use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Laminas\Filter\FilterChain;
 use Laminas\Filter\FilterPluginManager;
 use Laminas\InputFilter\Input;
@@ -16,8 +15,7 @@ use Marshal\Utils\Config;
 
 class Type
 {
-    private bool $isEmpty = true;
-    private array $parents = [];
+    private array $relations = [];
     private array $validationGroup = [];
     private array $validationMessages = [];
     
@@ -32,6 +30,16 @@ class Type
         private string $table,
         private array $config
     ) {
+    }
+    
+    public function __tostring(): string
+    {
+        return (string) $this->getAutoIncrement()->getValue();
+    }
+
+    public function addRelation(TypeRelation $relation): void
+    {
+        $this->relations[$relation->getIdentifier()] = $relation;
     }
 
     public function getAutoIncrement(): Property
@@ -96,6 +104,36 @@ class Type
         );
     }
 
+    public function getRelation(string $identifier): TypeRelation
+    {
+        if (isset($this->relations[$identifier])) {
+            return $this->relations[$identifier];
+        }
+
+        foreach ($this->getRelations() as $relation) {
+            if (
+                $identifier === $relation->getLocalProperty()->getName()
+                || $identifier === $relation->getLocalProperty()->getIdentifier()
+            ) {
+                return $relation;
+            }
+        }
+
+        throw new \InvalidArgumentException(\sprintf(
+            "Relation %s does not exist on type %s",
+            $identifier,
+            $this->getIdentifier()
+        ));
+    }
+
+    /**
+     * @return array<TypeRelation>
+     */
+    public function getRelations(): array
+    {
+        return $this->relations;
+    }
+
     public function getRoutePrefix(): string
     {
         return $this->config['routing']['route_prefix'] ?? '';
@@ -142,44 +180,10 @@ class Type
         return isset($this->config['routing']['route_prefix']);
     }
 
-    public function hydrate(array $result, ?AbstractPlatform $databasePlatform = NULL, ?string $alias = null): static
-    {
-        $this->isEmpty = empty($result);
-        $data = $this->normalizeData($result);
-        foreach ($data as $key => $values) {
-            if ($key === $this->getTable() || NULL !== $alias && $key === $alias) {
-                foreach ($values as $name => $value) {
-                    if (! $this->hasProperty($name)) {
-                        continue;
-                    }
-
-                    $property = $this->getProperty($name);
-                    $property->hydrate($value, $databasePlatform);
-                }
-            } else {
-                if (! $this->hasProperty($key)) {
-                    continue;
-                }
-
-                $property = $this->getProperty($key);
-                if (! $property->hasRelation()) {
-                    continue;
-                }
-
-                $property->getRelation()->getRelationType()->hydrate(
-                    $result,
-                    $databasePlatform,
-                    $property->getRelation()->getAlias()
-                );
-            }
-        }
-
-        return $this;
-    }
-
     public function isEmpty(): bool
     {
-        return $this->isEmpty;
+        // check for a non-null autoincrement property
+        return null === $this->getAutoIncrement()->getValue();
     }
 
     public function isRelationProperty(string $identifier): bool
@@ -188,7 +192,53 @@ class Type
             return FALSE;
         }
 
-        return $this->getProperty($identifier)->hasRelation();
+        foreach ($this->getRelations() as $relation) {
+            if ($relation->getLocalProperty()->getIdentifier() === $identifier
+                || $relation->getLocalProperty()->getName() === $identifier
+            ) {
+                return TRUE;
+            }
+        }
+
+        return FALSE;
+    }
+
+    public function isValid(string $operation): bool
+    {
+        // create our validator plugin manager
+        $validatorManager = new ValidatorPluginManager(
+            new ServiceManager(),
+            ['dependencies' => Config::get('validators')]
+        );
+
+        // validate individual properties
+        $inputFilter = $this->getPropertiesInputFilter($validatorManager);
+        if (! $inputFilter->setData($this->toArray())->isValid()) {
+            foreach ($inputFilter->getMessages() as $key => $message) {
+                $this->validationMessages[$key] = $message;
+            }
+        }
+
+        // chain type level validators
+        $chain = $validatorManager->get(ValidatorChain::class);
+        \assert($chain instanceof ValidatorChain);
+        foreach ($this->getValidators() as $validator => $options) {
+            $options['__operation'] = $operation;
+            $chain->attach(
+                $validatorManager->get($validator, $options),
+                $options['break_chain_on_failure'] ?? false,
+                $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
+            );
+        }
+
+        // validate the type
+        if (! $chain->isValid($inputFilter->getValues())) {
+            foreach ($chain->getMessages() as $key => $message) {
+                $this->validationMessages[$key] = $message;
+            }
+        }
+        
+        return empty($this->validationMessages);
     }
 
     public function removeProperty(string $identifier): static
@@ -240,44 +290,6 @@ class Type
         return $values;
     }
 
-    public function isValid(string $operation): bool
-    {
-        // create our validator plugin manager
-        $validatorManager = new ValidatorPluginManager(
-            new ServiceManager(),
-            ['dependencies' => Config::get('validators')]
-        );
-
-        // validate individual properties
-        $inputFilter = $this->getPropertiesInputFilter($validatorManager);
-        if (! $inputFilter->setData($this->toArray())->isValid()) {
-            foreach ($inputFilter->getMessages() as $key => $message) {
-                $this->validationMessages[$key] = $message;
-            }
-        }
-
-        // chain type level validators
-        $chain = $validatorManager->get(ValidatorChain::class);
-        \assert($chain instanceof ValidatorChain);
-        foreach ($this->getValidators() as $validator => $options) {
-            $options['__operation'] = $operation;
-            $chain->attach(
-                $validatorManager->get($validator, $options),
-                $options['break_chain_on_failure'] ?? false,
-                $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
-            );
-        }
-
-        // validate the type
-        if (! $chain->isValid($inputFilter->getValues())) {
-            foreach ($chain->getMessages() as $key => $message) {
-                $this->validationMessages[$key] = $message;
-            }
-        }
-        
-        return empty($this->validationMessages);
-    }
-
     private function getPropertiesInputFilter(ValidatorPluginManager $validatorPluginManager): InputFilter
     {
         $inputFilter = new InputFilter();
@@ -310,7 +322,7 @@ class Type
             }
 
             // set input options
-            $property->hasRelation()
+            $this->isRelationProperty($property->getIdentifier())
                 ? $input->setAllowEmpty(FALSE)->setRequired(TRUE)
                 : $input->setAllowEmpty(TRUE)->setRequired($property->getNotNull());
 
@@ -324,17 +336,5 @@ class Type
         }
 
         return $inputFilter;
-    }
-
-    private function normalizeData(array $result): array
-    {
-        $data = [];
-        foreach ($result as $key => $value) {
-            $parts = \explode('__', $key);
-            $name = \array_shift($parts);
-            $data[$name][\implode('__', $parts)] = $value;
-        }
-
-        return $data;
     }
 }

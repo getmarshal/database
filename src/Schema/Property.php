@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database;
+namespace Marshal\Database\Schema;
 
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Types\Type as DBALType;
 
-final class Property
+class Property
 {
     private bool $autoIncrement = false;
     /**
@@ -26,7 +26,6 @@ final class Property
     private bool $notNull = false;
     private array $platformOptions = [];
     private int $precision = 10;
-    private PropertyRelation $relation;
     private int $scale = 0;
     private DBALType $type;
     private string $typeName;
@@ -34,15 +33,9 @@ final class Property
     private array $validators = [];
     private mixed $value = null;
 
-    public function __construct(
-        private readonly string $identifier,
-        array $definition,
-        ?PropertyRelation $relation = null
-    ) {
+    public function __construct(private readonly string $identifier, array $definition)
+    {
         $this->prepareFromDefinition($definition);
-        if (null !== $relation) {
-            $this->relation = $relation;
-        }
     }
 
     public function isAutoIncrement(): bool
@@ -72,24 +65,12 @@ final class Property
 
     public function getDatabaseValue(AbstractPlatform $databasePlatform): mixed
     {
-        if (! $this->hasRelation()) {
-            return $this->getDatabaseType()->convertToDatabaseValue($this->getValue(), $databasePlatform);
+        $value = $this->getValue();
+        if ($value instanceof Type) {
+            $value = $value->getAutoIncrement()->getValue();
         }
 
-        $relation = $this->getValue();
-        if (! $relation instanceof Type) {
-            if (
-                \is_array($relation)
-                && isset($relation[$this->getRelationColumn()])
-                && \is_scalar($relation[$this->getRelationColumn()])
-            ) {
-                return $relation[$this->getRelationColumn()];
-            }
-
-            return $relation;
-        }
-
-        return $relation->getProperty($this->getRelationColumn())->getDatabaseValue($databasePlatform);
+        return $this->getDatabaseType()->convertToDatabaseValue($this->getValue(), $databasePlatform);
     }
 
     public function getDefaultValue(): mixed
@@ -147,25 +128,6 @@ final class Property
         return $this->precision;
     }
 
-    public function getRelation(): PropertyRelation
-    {
-        if (! $this->hasRelation()) {
-            throw new \InvalidArgumentException("Property {$this->getIdentifier()} has no relation");
-        }
-
-        return $this->relation;
-    }
-
-    public function getRelationProperty(): Property
-    {
-        return $this->getRelation()->getRelationProperty();
-    }
-
-    public function getRelationColumn(): string
-    {
-        return $this->getRelationProperty()->getName();
-    }
-
     public function getScale(): int
     {
         return $this->scale;
@@ -188,10 +150,6 @@ final class Property
 
     public function getValue(): mixed
     {
-        if ($this->hasRelation()) {
-            return $this->getRelation()->getRelationType();
-        }
-
         return $this->value;
     }
 
@@ -205,42 +163,9 @@ final class Property
         return isset($this->index);
     }
 
-    public function hasRelation(): bool
-    {
-        return isset($this->relation);
-    }
-
     public function hasUniqueConstraint(): bool
     {
         return isset($this->constraints['unique']) && $this->constraints['unique'] instanceof PropertyConstraint;
-    }
-
-    public function hydrate(mixed $value, ?AbstractPlatform $databasePlatform = NULL): void
-    {
-        if ($this->hasRelation()) {
-            if (\is_array($value)) {
-                $propertyData = [];
-                $relationContentTable = $this->getRelation()->getTable();
-                foreach ($value as $k => $v) {
-                    $propertyData["{$relationContentTable}__$k"] = $v;
-                }
-                $this->getRelation()->getRelationType()->hydrate(
-                    $propertyData,
-                    $databasePlatform,
-                    $this->getRelation()->getAlias()
-                );
-            } elseif (\is_int($value)) {
-                $this->getRelation()->getRelationType()->getAutoIncrement()->setValue($value);
-            } elseif ($value instanceof self) {
-                $this->getRelation()->getRelationProperty()->setValue($value);
-            }
-        }
-
-        NULL === $databasePlatform || TRUE !== $this->getConvertToPhpType()
-            ? $this->setValue($value)
-            : $this->setValue(
-                $this->getDatabaseType()->convertToPHPValue($value, $databasePlatform)
-            );
     }
 
     public function prepareFromDefinition(array $definition): void

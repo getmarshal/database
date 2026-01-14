@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Exception;
+namespace Marshal\Database\Query\Exception;
 
 use Marshal\Utils\Logger\LoggerManager;
 

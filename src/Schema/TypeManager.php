@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database;
+namespace Marshal\Database\Schema;
 
 use Marshal\Utils\Config;
 
@@ -20,6 +20,15 @@ final class TypeManager
     {
         $schema = Config::get('schema');
         $typesConfig = $schema['types'] ?? [];
+
+        // check if using table name as identifier
+        if (! isset($typesConfig[$identifier])) {
+            foreach ($typesConfig as $id => $config) {
+                if (isset($config['table']) && $config['table'] === $identifier) {
+                    return self::get($id);
+                }
+            }
+        }
 
         // validate the type
         $typeValidator = new Validator\TypeConfigValidator($typesConfig);
@@ -81,12 +90,20 @@ final class TypeManager
                 throw new Exception\InvalidPropertyConfigException($propertyIdentifier, $propertyValidator->getMessages());
             }
 
-            $propertyDefinition = $propsConfig[$propertyIdentifier];
-            $propertyRelation = isset($propertyDefinition['relation'])
-                ? new PropertyRelation($propertyDefinition['relation'])
-                : null;
-            $property = new Property($propertyIdentifier, $propertyDefinition, $propertyRelation);
-            $type->setProperty($property);
+            $type->setProperty(new Property($propertyIdentifier, $propsConfig[$propertyIdentifier]));
+        }
+
+        // add type relations
+        foreach ($config['relations'] ?? [] as $relationIdentifier => $relationConfig) {
+            $relationType = self::get($relationConfig['relationType']);
+            $type->addRelation(new TypeRelation(
+                localType: $type,
+                localProperty: $type->getProperty($relationConfig['localProperty']),
+                relationType: $relationType,
+                relationProperty: $relationType->getProperty($relationConfig['relationProperty']),
+                identifier: $relationIdentifier,
+                config: $relationConfig
+            ));
         }
 
         return $type;

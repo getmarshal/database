@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Schema;
+namespace Marshal\Database\Config;
 
 use Marshal\Utils\Schema;
 
-final class Migration
+final class MigrationType
 {
     public const string SCHEMA_NAME = "database::migration";
     public const string PROPERTY_DATABASE = "database::migration_db";

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Exception;
+namespace Marshal\Database\Schema\Exception;
 
 final class PropertyNotFoundException extends \InvalidArgumentException
 {
