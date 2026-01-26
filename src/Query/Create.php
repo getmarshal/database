@@ -27,17 +27,9 @@ final class Create extends Query
 
         // execute the query
         try {
-            $result = $query->executeStatement();
+            $query->executeStatement();
         } catch (\Throwable $e) {
-            throw new Exception\DatabaseQueryException($e);
-        }
-
-        // check the result
-        if (! \is_numeric($result) || \intval($result) == 0) {
-            LoggerManager::get()->error("Content not created", [
-                'sql' => $query->getSQL(),
-                'parameters' => $query->getParameters(),
-            ]);
+            throw new Exception\DatabaseQueryException($e, $query);
         }
         
         return $this->type;
@@ -59,7 +51,7 @@ final class Create extends Query
 
     protected function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->getQueryBuilder();
+        $queryBuilder = $this->createQueryBuilder();
         $queryBuilder->insert($this->type->getTable());
         foreach ($this->type->getProperties() as $property) {
             if ($property->isAutoIncrement()) {
@@ -74,15 +66,10 @@ final class Create extends Query
                 }
             }
 
-            $value = $property->getValue();
-            if ($value instanceof Type) {
-                $value = $value->getAutoIncrement()->getValue();
-            }
-
             $queryBuilder->setValue(
                 $property->getName(),
                 $queryBuilder->createNamedParameter(
-                    $property->getDatabaseType()->convertToDatabaseValue($value, $queryBuilder->getDatabasePlatform()),
+                    $property->convertToDatabaseValue($queryBuilder->getDatabasePlatform()),
                     $property->getDatabaseType()->getBindingType()
                 )
             );

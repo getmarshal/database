@@ -79,7 +79,6 @@ final class ConfigProvider
                 \Marshal\Database\Query::WHERE_ISNULL => Query\Operator\IsNull::class,
                 \Marshal\Database\Query::WHERE_LT => Query\Operator\Lt::class,
                 \Marshal\Database\Query::WHERE_LTE => Query\Operator\Lte::class,
-                \Marshal\Database\Query::WHERE_RAW => Query\Operator\Raw::class,
             ],
         ];
     }

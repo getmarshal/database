@@ -21,7 +21,7 @@ final class Update extends Query
     {
     }
 
-    public function execute(): Type
+    public function execute(): int|string
     {
         if (empty($this->values)) {
             return $this->type;
@@ -36,20 +36,12 @@ final class Update extends Query
             throw new Exception\InvalidInputException($this->type->getValidationMessages());
         }
         
-        $result = $query->executeStatement();
-        if (! \is_numeric($result) || \intval($result) == 0) {
-            LoggerManager::get()->info("No updates by: ", [
-                'sql' => $query->getSQL(),
-                'parameters' => $query->getParameters(),
-            ]);
-        }
-
-        return $this->type;
+        return $query->executeStatement();
     }
 
     protected function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->getQueryBuilder();
+        $queryBuilder = $this->createQueryBuilder();
         $queryBuilder->update($this->type->getTable());
         $this->applyWhereExpressions($queryBuilder);
 
@@ -66,7 +58,7 @@ final class Update extends Query
             $queryBuilder->set(
                 $property->getName(),
                 $queryBuilder->createNamedParameter(
-                    $property->getDatabaseType()->convertToDatabaseValue($value, $queryBuilder->getDatabasePlatform()),
+                    $property->convertToDatabaseValue($queryBuilder->getDatabasePlatform()),
                     $property->getDatabaseType()->getBindingType()
                 )
             );

@@ -110,10 +110,11 @@ class Type
             return $this->relations[$identifier];
         }
 
+        // search local properties
         foreach ($this->getRelations() as $relation) {
             if (
-                $identifier === $relation->getLocalProperty()->getName()
-                || $identifier === $relation->getLocalProperty()->getIdentifier()
+                $identifier === $relation->getLocalProperty()->getName() ||
+                $identifier === $relation->getLocalProperty()->getIdentifier()
             ) {
                 return $relation;
             }
@@ -175,6 +176,11 @@ class Type
         return FALSE;
     }
 
+    public function hasRelation(): bool
+    {
+        return empty($this->relations) ? false : true;
+    }
+
     public function hasRoutePrefix(): bool
     {
         return isset($this->config['routing']['route_prefix']);
@@ -193,8 +199,10 @@ class Type
         }
 
         foreach ($this->getRelations() as $relation) {
-            if ($relation->getLocalProperty()->getIdentifier() === $identifier
-                || $relation->getLocalProperty()->getName() === $identifier
+            if (
+                $relation->getLocalProperty()->getIdentifier() === $identifier ||
+                $relation->getLocalProperty()->getName() === $identifier ||
+                $relation->getAlias() === $identifier
             ) {
                 return TRUE;
             }
@@ -220,21 +228,24 @@ class Type
         }
 
         // chain type level validators
-        $chain = $validatorManager->get(ValidatorChain::class);
-        \assert($chain instanceof ValidatorChain);
-        foreach ($this->getValidators() as $validator => $options) {
-            $options['__operation'] = $operation;
-            $chain->attach(
-                $validatorManager->get($validator, $options),
-                $options['break_chain_on_failure'] ?? false,
-                $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
-            );
-        }
+        $validators = $this->getValidators();
+        if (! empty($validators)) {
+            $chain = $validatorManager->get(ValidatorChain::class);
+            \assert($chain instanceof ValidatorChain);
+            foreach ($validators as $validator => $options) {
+                $options['__operation'] = $operation;
+                $chain->attach(
+                    $validatorManager->get($validator, $options),
+                    $options['break_chain_on_failure'] ?? false,
+                    $options['priority'] ?? ValidatorChain::DEFAULT_PRIORITY
+                );
+            }
 
-        // validate the type
-        if (! $chain->isValid($inputFilter->getValues())) {
-            foreach ($chain->getMessages() as $key => $message) {
-                $this->validationMessages[$key] = $message;
+            // validate the type
+            if (! $chain->isValid($inputFilter->getValues())) {
+                foreach ($chain->getMessages() as $key => $message) {
+                    $this->validationMessages[$key] = $message;
+                }
             }
         }
         
@@ -324,7 +335,7 @@ class Type
             // set input options
             $this->isRelationProperty($property->getIdentifier())
                 ? $input->setAllowEmpty(FALSE)->setRequired(TRUE)
-                : $input->setAllowEmpty(TRUE)->setRequired($property->getNotNull());
+                : $input->setRequired($property->getNotNull());
 
             // append the input to theinput filter
             $inputFilter->add($input);

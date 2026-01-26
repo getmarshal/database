@@ -4,22 +4,21 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query\Operator;
 
-use Doctrine\DBAL\ParameterType;
 use Marshal\Database\QueryBuilder;
+use Marshal\Database\Schema\Property;
 
 final class Eq implements OperatorInterface
 {
-    public static function applyOperation(
+    public function __invoke(
         QueryBuilder $queryBuilder,
-        string $column,
-        mixed $value,
-        ParameterType $parameterType = ParameterType::STRING
+        Property $property,
+        string $column
     ): void {
         $queryBuilder->andWhere($queryBuilder->expr()->eq(
             $column,
             $queryBuilder->createNamedParameter(
-                $value,
-                $parameterType
+                $property->convertToDatabaseValue($queryBuilder->getDatabasePlatform()),
+                $property->getDatabaseType()->getBindingType()
             )
         ));
     }

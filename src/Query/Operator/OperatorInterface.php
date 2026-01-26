@@ -4,15 +4,10 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query\Operator;
 
-use Doctrine\DBAL\ParameterType;
 use Marshal\Database\QueryBuilder;
+use Marshal\Database\Schema\Property;
 
 interface OperatorInterface
 {
-    public static function applyOperation(
-        QueryBuilder $queryBuilder,
-        string $column,
-        mixed $value,
-        ParameterType $parameterType = ParameterType::STRING
-    ): void;
+    public function __invoke(QueryBuilder $queryBuilder, Property $property, string $column): void;
 }

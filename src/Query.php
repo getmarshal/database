@@ -68,6 +68,11 @@ abstract class Query
         return new Update($type);
     }
 
+    protected function createQueryBuilder(): QueryBuilder
+    {
+        return DatabaseManager::getConnection($this->type->getDatabase())->createQueryBuilder();
+    }
+
     protected function getQueryBuilder(): QueryBuilder
     {
         return DatabaseManager::getConnection($this->type->getDatabase())->createQueryBuilder();

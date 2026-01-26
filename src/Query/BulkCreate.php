@@ -16,7 +16,7 @@ class BulkCreate extends Query
 
     public function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->getQueryBuilder();
+        $queryBuilder = $this->createQueryBuilder();
         return $queryBuilder;
     }
 }

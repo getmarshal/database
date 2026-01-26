@@ -27,7 +27,7 @@ final class Delete extends Query
 
     protected function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->getQueryBuilder();
+        $queryBuilder = $this->createQueryBuilder();
         $queryBuilder->delete($this->type->getTable());
         $this->applyWhereExpressions($queryBuilder);
 

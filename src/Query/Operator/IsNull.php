@@ -4,20 +4,19 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query\Operator;
 
-use Doctrine\DBAL\ParameterType;
-use Doctrine\DBAL\Query\QueryBuilder;
+use Marshal\Database\QueryBuilder;
+use Marshal\Database\Schema\Property;
 
-final class IsNull implements OperatorInterface
+class IsNull implements OperatorInterface
 {
-    public static function applyOperation(
+    public function __invoke(
         QueryBuilder $queryBuilder,
-        string $column,
-        mixed $value,
-        ParameterType $parameterType = ParameterType::STRING
+        Property $property,
+        string $column
     ): void {
-        if (FALSE === $value) {
+        if (FALSE === $property->getValue()) {
             $queryBuilder->andWhere($queryBuilder->expr()->isNotNull($column));
-        } elseif (TRUE === $value) {
+        } elseif (TRUE === $property->getValue()) {
             $queryBuilder->andWhere($queryBuilder->expr()->isNull($column));
         }
     }

@@ -43,6 +43,20 @@ class Property
         return $this->autoIncrement;
     }
 
+    public function convertToDatabaseValue(AbstractPlatform $databasePlatform): mixed
+    {
+        $value = $this->value;
+        if ($value instanceof Type) {
+            $value = $value->getAutoIncrement()->getValue();
+        }
+
+        if ($this->typeName === 'bigint' && \is_array($value) && isset($value['id'])) {
+            $value = \intval($value['id']);
+        }
+
+        return $this->getDatabaseType()->convertToDatabaseValue($value, $databasePlatform);
+    }
+
     public function getDescription(): string
     {
         return $this->description;
@@ -65,12 +79,16 @@ class Property
 
     public function getDatabaseValue(AbstractPlatform $databasePlatform): mixed
     {
-        $value = $this->getValue();
+        $value = $this->value;
         if ($value instanceof Type) {
             $value = $value->getAutoIncrement()->getValue();
         }
 
-        return $this->getDatabaseType()->convertToDatabaseValue($this->getValue(), $databasePlatform);
+        if ($this->typeName === 'bigint' && \is_array($value) && isset($value['id'])) {
+            $value = \intval($value['id']);
+        }
+
+        return $this->getDatabaseType()->convertToDatabaseValue($value, $databasePlatform);
     }
 
     public function getDefaultValue(): mixed
