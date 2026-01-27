@@ -11,8 +11,7 @@ final class GenerateMigrationCommandFactory
 {
     public function __invoke(ContainerInterface $container): GenerateMigrationCommand
     {
-        $config = $container->get('config')['schema'] ?? [];
         $dispatcher = $container->get(EventDispatcherInterface::class);
-        return new GenerateMigrationCommand($dispatcher, $config);
+        return new GenerateMigrationCommand($dispatcher);
     }
 }

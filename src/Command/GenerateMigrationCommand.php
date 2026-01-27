@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Command;
 
+use Marshal\Database\DatabaseManager;
 use Marshal\Database\Event\GenerateMigrationEvent;
 use Marshal\Database\Event\SaveMigrationEvent;
-use Marshal\Utils\Database\DatabaseManager;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,7 +18,7 @@ class GenerateMigrationCommand extends Command
 {
     public const string COMMAND_NAME = "migration:generate";
 
-    public function __construct(private EventDispatcherInterface $eventDispatcher, private array $schemaConfig)
+    public function __construct(private EventDispatcherInterface $eventDispatcher)
     {
         parent::__construct(self::COMMAND_NAME);
     }
@@ -26,17 +26,21 @@ class GenerateMigrationCommand extends Command
     public function configure(): void
     {
         $this->addOption('database', 'd', InputOption::VALUE_REQUIRED, 'The database to generate migrations for');
+        $this->addOption('type', 't', InputOption::VALUE_OPTIONAL, 'The type to generate migrations for');
         $this->setDescription(
-            "Generate and save statements to migrate a database to conform to it's schema specification"
+            "Generate and save statements to migrate a database or type to conform to it's schema specification"
         );
     }
 
     public function execute(InputInterface $input, OutputInterface $output): int
     {
+        // validate the input
         $input->validate();
 
-        $database = $input->getOption('database');
+        // prepare arguments
         $io = new SymfonyStyle($input, $output);
+        $database = $input->getOption('database');
+        $type = $input->getOption('type');
 
         // generate the migration migration
         $event = new GenerateMigrationEvent($database);
@@ -44,7 +48,6 @@ class GenerateMigrationCommand extends Command
             $this->eventDispatcher->dispatch($event);
             $diff = $event->getSchemaDiff();
         } catch (\Throwable $e) {
-            $io->error("Error generating migration");
             $io->error($e->getMessage());
             return Command::FAILURE;
         }

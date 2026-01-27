@@ -10,7 +10,6 @@ use Marshal\Database\Query\Trait\ValuesTrait;
 use Marshal\Database\Query\Trait\WhereTrait;
 use Marshal\Database\QueryBuilder;
 use Marshal\Database\Schema\Type;
-use Marshal\Utils\Logger\LoggerManager;
 
 final class Update extends Query
 {
@@ -43,7 +42,7 @@ final class Update extends Query
     {
         $queryBuilder = $this->createQueryBuilder();
         $queryBuilder->update($this->type->getTable());
-        $this->applyWhereExpressions($queryBuilder);
+        $this->applyWhereExpressions($queryBuilder, $this->type);
 
         // hydrate the type
         $hydrator = new TypeInputHydrator();

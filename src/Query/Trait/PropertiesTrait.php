@@ -29,19 +29,9 @@ trait PropertiesTrait
         return $this;
     }
 
-    public function distinct(string $identifier, array|string $property): static
+    public function distinct(string $identifier, string $property): static
     {
-        if (\is_array($property)) {
-            $this->distinct[$identifier] = $property;
-            return $this;
-        }
-
-        if (! isset($this->distinct[$identifier])) {
-            $this->distinct[$identifier] = [$property];
-            return $this;
-        }
-
-        $this->distinct[$identifier][] = $property;
+        $this->distinct = [$identifier, $property];
         return $this;
     }
 
@@ -65,39 +55,44 @@ trait PropertiesTrait
 
     private function applyDistincts(QueryBuilder $queryBuilder, Type $type): void
     {
-        foreach ($this->distinct as $identifier => $properties) {
-            if ($type->isRelationProperty($identifier)) {
-                $relation = $type->getRelation($identifier);
-                $this->applyTypeDistinctProperties($queryBuilder, $relation->getRelationType(), $properties, $relation->getAlias());
-                $this->applyRelationJoin($queryBuilder, $relation);
-                continue;
-
-            }
-            
-            if ($type->getIdentifier() === $identifier || $type->getTable() === $identifier) {
-                $this->applyTypeDistinctProperties($queryBuilder, $type, $properties);
-                continue;
-            }
-
-            // search if an alias is being used
-            $relationProcessed = false;
-            foreach ($type->getRelations() as $relation) {
-                if ($identifier === $relation->getAlias()) {
-                    $this->applyTypeDistinctProperties($queryBuilder, $relation->getRelationType(), $properties, $relation->getAlias());
-                    $this->applyRelationJoin($queryBuilder, $relation);
-                    $relationProcessed = true;
-                }
-            }
-
-            if (true === $relationProcessed) {
-                continue;
-            }
-
-            throw new \InvalidArgumentException(\sprintf(
-                "Unknown distinct identifier %s",
-                $identifier
-            ));
+        if (empty($this->distinct)) {
+            return;
         }
+
+        [$typeIdentifier, $propertyIdentifier] = $this->distinct;
+        foreach ($this->distinct as $identifier => $properties) {
+        
+        }
+
+        if ($type->getIdentifier() === $typeIdentifier || $type->getTable() === $typeIdentifier) {
+            if (! $type->hasProperty($propertyIdentifier)) {
+                throw new \InvalidArgumentException(\sprintf(
+                    "Invalid distinct query: Property %s not found on type %s",
+                    $propertyIdentifier, $typeIdentifier
+                ));
+            }
+
+            $this->applyTypeDistinctProperty($queryBuilder, $type, $propertyIdentifier);
+            return;
+        }
+
+        if ($type->isRelationProperty($typeIdentifier)) {
+            $relation = $type->getRelation($typeIdentifier);
+            $this->applyTypeDistinctProperty($queryBuilder, $relation->getRelationType(), $propertyIdentifier, $relation->getAlias());
+            // $this->applyRelationJoin($queryBuilder, $relation);
+            return;
+
+        }
+        
+        if ($type->getIdentifier() === $identifier || $type->getTable() === $identifier) {
+            $this->applyTypeDistinctProperties($queryBuilder, $type, $properties);
+            return;
+        }
+
+        throw new \InvalidArgumentException(\sprintf(
+            "Invalid distinct query. Unknown distinct identifier %s",
+            $typeIdentifier
+        ));
     }
 
     protected function applyProperties(QueryBuilder $queryBuilder, Type $type, ?string $alias = null): void
@@ -110,9 +105,21 @@ trait PropertiesTrait
             : $this->properties;
 
         foreach ($delta as $identifier => $properties) {
+            if ($type->isRelationProperty($identifier)) {
+                $relation = $type->getRelation($identifier);
+                $this->applyTypeProperties(
+                    $queryBuilder,
+                    $relation->getRelationType(),
+                    $properties,
+                    $relation->getAlias()
+                );
+                continue;
+            }
+
             if ($type->hasProperty($identifier)) {
                 $this->applyTypeProperties($queryBuilder, $type, $properties, $alias);
                 $this->excludeProperties($alias ?? $identifier, $properties);
+                continue;
             }
 
             if (
@@ -131,23 +138,21 @@ trait PropertiesTrait
         }
     }
 
-    protected function applyTypeDistinctProperties(QueryBuilder $queryBuilder, Type $type, array $properties, ?string $alias = null): void
+    protected function applyTypeDistinctProperty(QueryBuilder $queryBuilder, Type $type, string $identifier, ?string $alias = null): void
     {
-        foreach ($properties as $identifier) {
-            if (! $type->hasProperty($identifier) && null === $alias) {
-                throw new \InvalidArgumentException(\sprintf(
-                    "Distinct property %s not found on type %s",
-                ));
-            }
-
-            // add the qualfied select
-            $table = $alias ?? $type->getTable();
-            $name = $type->getProperty($identifier)->getName();
-            $queryBuilder->addSelect("DISTINCT {$table}.$name AS {$table}__$name");
-
-            // exclude property from further processing
-            $this->excludeProperty($type->getIdentifier(), $identifier);
+        if (! $type->hasProperty($identifier) && null === $alias) {
+            throw new \InvalidArgumentException(\sprintf(
+                "Distinct property %s not found on type %s",
+            ));
         }
+
+        // add the qualfied select
+        $table = $alias ?? $type->getTable();
+        $name = $type->getProperty($identifier)->getName();
+        $queryBuilder->addSelect("DISTINCT {$table}.$name AS {$table}__$name");
+
+        // exclude property from further processing
+        $this->excludeProperty($type->getIdentifier(), $identifier);
     }
 
     protected function applyTypeProperties(QueryBuilder $queryBuilder, Type $type, array $properties, ?string $alias = null): void
@@ -160,8 +165,7 @@ trait PropertiesTrait
                 ));
             }
 
-            $property = $type->getProperty($identifier);
-            
+            $property = $type->getProperty($identifier);            
             // skip excluded properties by type identifier
             if (\array_key_exists($type->getIdentifier(), $this->excludeProperties)) {
                 if (
@@ -183,6 +187,9 @@ trait PropertiesTrait
             }
 
             $table = $alias ?? $type->getTable();
+            if ($type->isRelationProperty($property->getIdentifier())) {
+                $table = $type->getRelation($property->getIdentifier())->getAlias();
+            }
 
             // add the select
             if ($type->isRelationProperty($property->getIdentifier())) {

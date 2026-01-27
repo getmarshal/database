@@ -43,7 +43,7 @@ final class TypeManager
             }
 
             if (! \is_subclass_of($config['wrapperClass'], Type::class)) {
-                throw new \RuntimeException("Wrapper class not a subclass of Type");
+                throw new \InvalidArgumentException("Wrapper class not a subclass of Type");
             }
             
             $type = new $config['wrapperClass'](

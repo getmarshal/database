@@ -12,6 +12,6 @@ final class SetupMigrationsCommandFactory
     public function __invoke(ContainerInterface $container): SetupMigrationsCommand
     {
         $dispatcher = $container->get(EventDispatcherInterface::class);
-        return new SetupMigrationsCommand();
+        return new SetupMigrationsCommand($dispatcher);
     }
 }

@@ -30,6 +30,11 @@ class Select extends Query
     private int $offset = 0;
     private bool $toArray = false;
 
+    public function __construct(string $identifier)
+    {
+        $this->type = TypeManager::get($identifier);
+    }
+
     public function count(): int
     {
         return $this->fetchAllLazy()->count();
@@ -93,12 +98,6 @@ class Select extends Query
         return $this->type;
     }
 
-    public function from(string $identifier): static
-    {
-        $this->type = TypeManager::get($identifier);
-        return $this;
-    }
-
     public function limit(int $limit): static
     {
         $this->limit = $limit;
@@ -119,12 +118,6 @@ class Select extends Query
 
     protected function prepare(): QueryBuilder
     {
-        if (! isset($this->type)) {
-            throw new \InvalidArgumentException(\sprintf(
-                "Query has no from clause"
-            ));
-        }
-
         $queryBuilder = $this->createQueryBuilder();
         $queryBuilder->from($this->type->getTable(), $this->type->getTable());
 

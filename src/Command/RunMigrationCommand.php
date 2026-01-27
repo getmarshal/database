@@ -6,6 +6,7 @@ namespace Marshal\Database\Command;
 
 use Doctrine\DBAL\Schema\SchemaDiff;
 use Marshal\Database\DatabaseManager;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -16,7 +17,7 @@ final class RunMigrationCommand extends Command
 {
     public const string COMMAND_NAME = "migration:run";
 
-    public function __construct()
+    public function __construct(private EventDispatcherInterface $eventDispatcher)
     {
         parent::__construct(self::COMMAND_NAME);
     }

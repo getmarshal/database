@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Command;
 
-use Marshal\ContentManager\Schema\TypeManager;
 use Marshal\Database\DatabaseManager;
+use Marshal\Database\Event\SetupMigrationsEvent;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -13,9 +14,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class SetupMigrationsCommand extends Command
 {
-    public const string COMMAND_NAME = "migration:setup";
+    public const string COMMAND_NAME = "database:migration:setup";
 
-    public function __construct()
+    public function __construct(private EventDispatcherInterface $eventDispatcher)
     {
         parent::__construct(self::COMMAND_NAME);
     }
@@ -30,29 +31,20 @@ final class SetupMigrationsCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $io->info("Setting up migrations...");
 
-        try {
-            $connection = DatabaseManager::getConnection();
-        } catch (\Throwable $e) {
-            $io->error("Error connecting to database");
-            $io->error($e->getMessage());
-            return Command::FAILURE;
-        }
-
+        $connection = DatabaseManager::getConnection();
         if ($connection->createSchemaManager()->tableExists('migration')) {
-            $io->info("Migrations already setup");
+            $io->success("Migrations alreafy setup");
             return Command::SUCCESS;
         }
 
-        // create the migrations table
-        $type = TypeManager::get('marshal::migration');
-
-        $schema = $this->buildContentSchema([$type]);
-        foreach ($schema->toSql($connection->getDatabasePlatform()) as $createStmt) {
-            $connection->executeStatement($createStmt);
+        $event = new SetupMigrationsEvent();
+        $this->eventDispatcher->dispatch($event);
+        if ($event->hasErrorMessages()) {
+            $io->error($event->getErrorMessages());
+            return Command::FAILURE;
         }
 
         $io->success("Migration table setup");
-
         return Command::SUCCESS;
     }
 }

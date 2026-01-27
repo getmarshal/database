@@ -19,7 +19,7 @@ final class DatabaseManager
     {
     }
 
-    public static function getConnection(string $database = "marshal"): Connection
+    public static function getConnection(string $database = "marshal::main"): Connection
     {
         if (isset(self::$connections[$database])) {
             return self::$connections[$database];

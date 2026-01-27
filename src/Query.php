@@ -58,9 +58,9 @@ abstract class Query
         return new Delete;
     }
 
-    public static function select(): Select
+    public static function from(string $type): Select
     {
-        return new Select;
+        return new Select($type);
     }
 
     public static function update(Type $type): Update
@@ -69,11 +69,6 @@ abstract class Query
     }
 
     protected function createQueryBuilder(): QueryBuilder
-    {
-        return DatabaseManager::getConnection($this->type->getDatabase())->createQueryBuilder();
-    }
-
-    protected function getQueryBuilder(): QueryBuilder
     {
         return DatabaseManager::getConnection($this->type->getDatabase())->createQueryBuilder();
     }

@@ -29,7 +29,7 @@ final class Delete extends Query
     {
         $queryBuilder = $this->createQueryBuilder();
         $queryBuilder->delete($this->type->getTable());
-        $this->applyWhereExpressions($queryBuilder);
+        $this->applyWhereExpressions($queryBuilder, $this->type);
 
         return $queryBuilder;
     }

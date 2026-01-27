@@ -4,7 +4,9 @@ declare(strict_types= 1);
 
 namespace Marshal\Database\Command;
 
+use Marshal\Database\ConfigProvider;
 use Marshal\Database\DatabaseManager;
+use Marshal\Database\Query;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -12,7 +14,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class MigrationStatusCommand extends Command
 {
-    public const string COMMAND_NAME = "migration:status";
+    public const string COMMAND_NAME = "database:migration:status";
 
     public function __construct()
     {
@@ -27,15 +29,12 @@ final class MigrationStatusCommand extends Command
     public function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-
         $io->info("Checking migration status...");
 
-        // read migrations status
         try {
             $connection = DatabaseManager::getConnection();
         } catch (\Throwable $e) {
-            $io->error("Error connecting to database");
-            $io->error($e->getMessage());
+            $io->success("messages");
             return Command::FAILURE;
         }
 
@@ -45,20 +44,17 @@ final class MigrationStatusCommand extends Command
             return Command::FAILURE;
         }
 
-        $collection = $connection->createQueryBuilder()
-            ->select('m.*')
-            ->from('migration', 'm')
-            ->orderBy('created_at', 'DESC')
-            ->executeQuery()
-            ->fetchAllAssociative();
-        
-        if (empty($collection)) {
+        // fetch all migrations
+        $data = Query::from(ConfigProvider::MIGRATION_TYPE)
+            ->orderBy(ConfigProvider::MIGRATION_CREATED_AT, 'DESC')
+            ->fetchAll();        
+        if (empty($data)) {
             $io->success("No pending migrations");
             return Command::SUCCESS;
         }
 
         $result = [];
-        foreach ($collection as $row) {
+        foreach ($data as $row) {
             $row['status'] = $row['status'] == 1
                 ? 'Done'
                 : 'Pending';

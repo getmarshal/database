@@ -12,6 +12,6 @@ final class RunMigrationCommandFactory
     public function __invoke(ContainerInterface $container): RunMigrationCommand
     {
         $dispatcher = $container->get(EventDispatcherInterface::class);
-        return new RunMigrationCommand();
+        return new RunMigrationCommand($dispatcher);
     }
 }

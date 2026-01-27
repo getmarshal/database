@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Marshal\Database\Event;
 
 use Doctrine\DBAL\Schema\SchemaDiff;
+use Marshal\Database\ConfigProvider;
 
 final class SaveMigrationEvent
 {
@@ -40,5 +41,14 @@ final class SaveMigrationEvent
     public function setIsSuccess(bool $isSuccess): void
     {
         $this->isSuccess = $isSuccess;
+    }
+
+    public function toArray(): array
+    {
+        return [
+            ConfigProvider::PROPERTY_NAME => $this->getMigrationName(),
+            ConfigProvider::PROPERTY_DATABASE => $this->getDatabase(),
+            ConfigProvider::PROPERTY_DIFF => \serialize($this->getSchemaDiff()),
+        ];
     }
 }
