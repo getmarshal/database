@@ -16,7 +16,7 @@ final class Create extends Query
     {
     }
 
-    public function execute(): Type
+    public function execute(): object
     {
         $query = $this->prepare();
 

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Command;
 
+use Marshal\Database\ConfigProvider;
 use Marshal\Database\DatabaseManager;
 use Marshal\Database\Event\GenerateMigrationEvent;
 use Marshal\Database\Event\SaveMigrationEvent;
+use Marshal\Database\Repository\MigrationRepository;
+use Marshal\Utils\Trait\CommandInputValidatorTrait;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -16,7 +19,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 class GenerateMigrationCommand extends Command
 {
-    public const string COMMAND_NAME = "migration:generate";
+    use CommandInputValidatorTrait;
+
+    public const string COMMAND_NAME = "database:generate-migration";
 
     public function __construct(private EventDispatcherInterface $eventDispatcher)
     {
@@ -35,15 +40,17 @@ class GenerateMigrationCommand extends Command
     public function execute(InputInterface $input, OutputInterface $output): int
     {
         // validate the input
-        $input->validate();
+        $this->validateInput($input);
 
         // prepare arguments
         $io = new SymfonyStyle($input, $output);
         $database = $input->getOption('database');
-        $type = $input->getOption('type');
+        $event = new GenerateMigrationEvent($database);
+        if ($input->hasOption('type')) {
+            $event->setTypeIdentifier($input->getOption('type'));
+        }
 
         // generate the migration migration
-        $event = new GenerateMigrationEvent($database);
         try {
             $this->eventDispatcher->dispatch($event);
             $diff = $event->getSchemaDiff();
@@ -78,9 +85,12 @@ class GenerateMigrationCommand extends Command
         $normalizedName = $this->normalizeMigrationName($name);
 
         // save the migration
-        $saveEvent = new SaveMigrationEvent($normalizedName, $database, $diff);
-        $this->eventDispatcher->dispatch($saveEvent);
-        if ($saveEvent->getIsSuccess() === FALSE) {
+        $migration = MigrationRepository::save([
+            ConfigProvider::MIGRATION_NAME => $normalizedName,
+            ConfigProvider::MIGRATION_DATABASE => $database,
+            ConfigProvider::MIGRATION_DIFF => \serialize($diff),
+        ]);
+        if ($migration->isEmpty()) {
             $io->error("Could not save migration");
             return Command::FAILURE;
         }

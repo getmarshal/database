@@ -27,6 +27,7 @@ final class ConfigProvider
             "events" => $this->getEventListeners(),
             "filters" => [],
             "input_filters" => [],
+            "messages" => $this->getMessagesConfig(),
             "schema" => [
                 "properties" => [
                     self::MIGRATION_AUTO_ID => $this->getPropertyId(),
@@ -65,10 +66,10 @@ final class ConfigProvider
                 Command\RollbackMigrationCommand::class => Command\RollbackMigrationCommandFactory::class,
                 Command\RunMigrationCommand::class => Command\RunMigrationCommandFactory::class,
                 Command\SetupMigrationsCommand::class => Command\SetupMigrationsCommandFactory::class,
-                Listener\MigrationEventsListener::class => Listener\MigrationEventsListenerFactory::class,
             ],
             "invokables" => [
                 Command\MigrationStatusCommand::class => Command\MigrationStatusCommand::class,
+                Listener\MigrationEventsListener::class => Listener\MigrationEventsListener::class,
             ],
         ];
     }
@@ -79,7 +80,7 @@ final class ConfigProvider
             "listeners" => [
                 Listener\MigrationEventsListener::class => [
                     Event\GenerateMigrationEvent::class => [
-                        "listener" => "onCreateMigrationEvent",
+                        "listener" => "onGenerateMigrationEvent",
                     ],
                     Event\RollbackMigrationEvent::class => [
                         "listener" => "onRollbackMigrationEvent",
@@ -108,6 +109,11 @@ final class ConfigProvider
                 \Marshal\Database\Query::WHERE_LTE => Query\Operator\Lte::class,
             ],
         ];
+    }
+
+    private function getMessagesConfig(): array
+    {
+        return [];
     }
 
     private function getPropertyCreatedAt(): array

@@ -5,7 +5,8 @@
     "license": "AGPL-3.0-or-later",
     "autoload": {
         "psr-4": {
-            "Marshal\\Database\\": "src/"
+            "Marshal\\Database\\": "src/",
+            "Marshal\\DatabaseTest\\": "test/"
         }
     },
     "authors": [

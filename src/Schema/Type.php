@@ -23,13 +23,11 @@ class Type
      * @var array<string, Property>
      */
     private array $properties = [];
+    private TypeConfig $typeConfig;
 
-    final public function __construct(
-        private string $identifier,
-        private string $database,
-        private string $table,
-        private array $config
-    ) {
+    final public function __construct(private readonly string $identifier, private readonly array $config)
+    {
+        $this->typeConfig = new TypeConfig($config);
     }
     
     public function __tostring(): string
@@ -53,24 +51,9 @@ class Type
         throw new \InvalidArgumentException("no autoincrement property");
     }
 
-    public function getCollectionTemplate(): string
-    {
-        return $this->config['templates']['collection'];
-    }
-
-    public function getContentTemplate(): string
-    {
-        return $this->config['templates']['content'];
-    }
-
     public function getDatabase(): string
     {
-        return $this->database;
-    }
-
-    public function getDescription(): string
-    {
-        return $this->config["description"];
+        return $this->config['database'];
     }
 
     public function getIdentifier(): string
@@ -78,9 +61,9 @@ class Type
         return $this->identifier;
     }
 
-    public function getName(): string
+    public function getTypeConfig(): TypeConfig
     {
-        return $this->config["name"];
+        return $this->typeConfig;
     }
 
     /**
@@ -100,7 +83,7 @@ class Type
         }
         
         throw new \InvalidArgumentException(
-            \sprintf("Property %s does not exist in type: %s", $identifier, $this->getName())
+            \sprintf("Property %s does not exist in type: %s", $identifier, $this->getIdentifier())
         );
     }
 
@@ -135,14 +118,9 @@ class Type
         return $this->relations;
     }
 
-    public function getRoutePrefix(): string
-    {
-        return $this->config['routing']['route_prefix'] ?? '';
-    }
-
     public function getTable(): string
     {
-        return $this->table;
+        return $this->config['table'];
     }
 
     public function getValidationMessages(): array
@@ -153,16 +131,6 @@ class Type
     public function getValidators(): array
     {
         return $this->config['validators'] ?? [];
-    }
-
-    public function hasCollectionTemplate(): bool
-    {
-        return isset($this->config['templates']['collection']);
-    }
-
-    public function hasContentTemplate(): bool
-    {
-        return isset($this->config['templates']['content']);
     }
 
     public function hasProperty(string $identifier): bool
@@ -179,11 +147,6 @@ class Type
     public function hasRelation(): bool
     {
         return empty($this->relations) ? false : true;
-    }
-
-    public function hasRoutePrefix(): bool
-    {
-        return isset($this->config['routing']['route_prefix']);
     }
 
     public function isEmpty(): bool
@@ -250,19 +213,6 @@ class Type
         }
         
         return empty($this->validationMessages);
-    }
-
-    public function removeProperty(string $identifier): static
-    {
-        foreach ($this->getProperties() as $name => $property) {
-            if ($identifier !== $property->getIdentifier()) {
-                continue;
-            }
-
-            unset($this->properties[$name]);
-        }
-
-        return $this;
     }
 
     public function setProperty(Property $property): static

@@ -14,7 +14,6 @@ use Marshal\Database\Query\Trait\PropertiesTrait;
 use Marshal\Database\Query\Trait\RelationsTrait;
 use Marshal\Database\Query\Trait\WhereTrait;
 use Marshal\Database\QueryBuilder;
-use Marshal\Database\Schema\Type;
 use Marshal\Database\Schema\TypeManager;
 
 class Select extends Query
@@ -28,7 +27,6 @@ class Select extends Query
 
     private ?int $limit = null;
     private int $offset = 0;
-    private bool $toArray = false;
 
     public function __construct(string $identifier)
     {
@@ -40,12 +38,20 @@ class Select extends Query
         return $this->fetchAllLazy()->count();
     }
 
-    public function fetch(): array
+    public function fetch(): object
     {
-        return $this->fetchArrayResult($this->prepare());
+        $query = $this->prepare();
+        $result = $this->fetchArrayResult($query);
+
+        if (! empty($result)) {
+            $hydrator = new DatabaseResultHydrator();
+            $hydrator->hydrate($this->type, $result, $query->getDatabasePlatform());
+        }
+
+        return $this->type;
     }
 
-    public function fetchAll(): array
+    public function fetchAllAssociative(): array
     {
         $query = $this->prepare();
         try {
@@ -60,7 +66,7 @@ class Select extends Query
         return $result;
     }
 
-    public function fetchAllLazy(): Collection
+    public function fetchAllLazy(bool $toArray = false): Collection
     {
         $query = $this->prepare();
         try {
@@ -75,7 +81,6 @@ class Select extends Query
         $type = $this->type;
         $hydrator = new DatabaseResultHydrator;
         $platform = $query->getDatabasePlatform();
-        $toArray = $this->toArray;
 
         return Collection::fromCallable(static function () use ($iterable, $toArray, $type, $platform, $hydrator): \Generator {
             foreach ($iterable as $row) {
@@ -85,17 +90,9 @@ class Select extends Query
         });
     }
 
-    public function fetchType(): Type
+    public function fetchAssociative(): array
     {
-        $query = $this->prepare();
-        $result = $this->fetchArrayResult($query);
-
-        if (! empty($result)) {
-            $hydrator = new DatabaseResultHydrator();
-            $hydrator->hydrate($this->type, $result, $query->getDatabasePlatform());
-        }
-
-        return $this->type;
+        return $this->fetchArrayResult($this->prepare());
     }
 
     public function limit(int $limit): static
@@ -107,12 +104,6 @@ class Select extends Query
     public function offset(int $offset): static
     {
         $this->offset = $offset;
-        return $this;
-    }
-
-    public function toArray(): static
-    {
-        $this->toArray = true;
         return $this;
     }
 

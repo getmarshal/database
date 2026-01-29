@@ -21,8 +21,7 @@ final class TypeManager
         $schema = Config::get('schema');
         $typesConfig = $schema['types'] ?? [];
 
-        // check if using table name as identifier
-        if (! isset($typesConfig[$identifier])) {
+        if (! \class_exists($identifier)) {
             foreach ($typesConfig as $id => $config) {
                 if (isset($config['table']) && $config['table'] === $identifier) {
                     return self::get($id);
@@ -37,30 +36,11 @@ final class TypeManager
         }
 
         $config = $typesConfig[$identifier];
-        if (isset($config['wrapperClass'])) {
-            if (! \class_exists($config['wrapperClass'])) {
-                throw new \InvalidArgumentException("Wrapper class does not exist");
-            }
-
-            if (! \is_subclass_of($config['wrapperClass'], Type::class)) {
-                throw new \InvalidArgumentException("Wrapper class not a subclass of Type");
-            }
-            
-            $type = new $config['wrapperClass'](
-                identifier: $identifier,
-                database: $config['database'] ?? \explode('::', $identifier)[0],
-                table: $config['table'] ?? \explode('::', $identifier)[1],
-                config: $config
-            );
-        } else {
-            $type = new Type(
-                identifier: $identifier,
-                database: $config['database'] ?? \explode('::', $identifier)[0],
-                table: $config['table'] ?? \explode('::', $identifier)[1],
-                config: $config
-            );
-        }
-
+        $type = \class_exists($identifier)
+            ? new $identifier($identifier, $config)
+            : new Type($identifier, $config);
+        \assert($type instanceof Type);
+ 
         // add type properties
         $propsConfig = $schema['properties'] ?? [];
         $propertyValidator = new Validator\PropertyConfigValidator($propsConfig, $typesConfig);
@@ -70,6 +50,7 @@ final class TypeManager
             }
 
             // check if property has parent
+            // @todo remove property inheritance
             if (isset($propsConfig[$propertyIdentifier]['inherits'])) {
                 $parent = $propsConfig[$propertyIdentifier]['inherits'];
                 if (! isset($propsConfig[$parent])) {

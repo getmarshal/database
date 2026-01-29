@@ -6,45 +6,59 @@ namespace Marshal\Database\Listener;
 
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\Table;
-use Marshal\Database\ConfigProvider;
 use Marshal\Database\Event\GenerateMigrationEvent;
 use Marshal\Database\Event\RollbackMigrationEvent;
 use Marshal\Database\Event\RunMigrationEvent;
-use Marshal\Database\Event\SaveMigrationEvent;
 use Marshal\Database\Event\SetupMigrationsEvent;
-use Marshal\Database\Query;
 use Marshal\Database\DatabaseManager;
 use Marshal\Database\Schema\Type;
 use Marshal\Database\Schema\TypeManager;
+use Marshal\Utils\Config;
 use Marshal\Utils\Logger\LoggerManager;
 
 final class MigrationEventsListener
 {
-    public function __construct(private array $schemaConfig, private array $databaseConfig)
-    {
-    }
-
     public function onGenerateMigrationEvent(GenerateMigrationEvent $event): void
     {
         $database = $event->getDatabase();
-
-        // gather the definitions
-        $definitions = [];
-
-        foreach ($this->schemaConfig['types'] ?? [] as $name => $typeConfig) {
-            if (! isset($typeConfig['database']) || $typeConfig['database'] !== $database) {
-                continue;
+        $connection = DatabaseManager::getConnection($database);
+        $dbalSchema = $connection->createSchemaManager();
+        if ($event->isTypeMigration()) {
+            $schema = new Schema();
+            $type = TypeManager::get($event->getTypeIdentifier());
+            if (! $dbalSchema->tableExists($type->getTable())) {
+                $this->buildDatabaseType($schema, $type);
+                $event->setDiff($dbalSchema->createComparator()->compareSchemas(new Schema(), $schema));
+                return;
             }
 
-            $definitions[$name] = TypeManager::get($name);
-        }
+            $definitions = [$type];
+            foreach ($dbalSchema->introspectSchema()->getTables() as $table) {
+                if ($table->getName() === $type->getTable()) {
+                    $this->buildDatabaseType($schema, $type);
+                    $event->setDiff($dbalSchema->createComparator()->compareSchemas(new Schema([$table]), $schema));
+                    return;
+                }
+            }
+        } else {
+            $definitions = [];
+            $schemaConfig = Config::get('schema');
+            foreach ($schemaConfig['types'] ?? [] as $name => $typeConfig) {
+                if (! isset($typeConfig['database']) || $typeConfig['database'] !== $database) {
+                    continue;
+                }
 
-        // generate the schema diff
-        $dbalSchema = DatabaseManager::getConnection($database)->createSchemaManager();
-        $fromSchema = $dbalSchema->introspectSchema();
-        $toSchema = $this->buildContentSchema($definitions);
-        $diff = $dbalSchema->createComparator()->compareSchemas($fromSchema, $toSchema);
-        $event->setDiff($diff);
+                // if ($event->isTypeMigration())
+                $type = TypeManager::get($name);
+                $definitions[$name] = TypeManager::get($name);
+            }
+
+            // generate the schema diff
+            $fromSchema = $dbalSchema->introspectSchema();
+            $toSchema = $this->buildContentSchema($definitions);
+            $diff = $dbalSchema->createComparator()->compareSchemas($fromSchema, $toSchema);
+            $event->setDiff($diff);
+        }        
     }
 
     public function onRollbackMigrationEvent(RollbackMigrationEvent $event): void
@@ -53,18 +67,6 @@ final class MigrationEventsListener
 
     public function onRunMigrationEvent(RunMigrationEvent $event): void
     {
-    }
-
-    public function onSaveMigrationEvent(SaveMigrationEvent $event): void
-    {
-        try {
-            Query::create(ConfigProvider::MIGRATION_TYPE)
-                ->fromInput($event->toArray())
-                ->execute();
-            $event->setIsSuccess(TRUE);
-        } catch (\Throwable $e) {
-            LoggerManager::get()->error($e->getMessage());
-        }
     }
 
     public function onSetupMigrationsEvent(SetupMigrationsEvent $event): void
@@ -76,13 +78,12 @@ final class MigrationEventsListener
             return;
         }
 
-        if ($connection->createSchemaManager()->tableExists('migration')) {
+        // create the migrations table
+        $type = TypeManager::get('database::migration');
+        if ($connection->createSchemaManager()->tableExists($type->getTable())) {
             LoggerManager::get()->info("Migrations already setup");
             return;
         }
-
-        // create the migrations table
-        $type = TypeManager::get('database::migration');
 
         $schema = $this->buildContentSchema([$type]);
         foreach ($schema->toSql($connection->getDatabasePlatform()) as $createStmt) {
@@ -97,7 +98,6 @@ final class MigrationEventsListener
             // prepare column options
             $columnOptions = [
                 'notnull' => $property->getNotNull(),
-                'default' => $property->getDefaultValue(),
                 'autoincrement' => $property->isAutoIncrement(),
                 'length' => $property->getLength(),
                 'fixed' => $property->getFixed(),
@@ -106,6 +106,10 @@ final class MigrationEventsListener
                 'platformOptions' => $property->getPlatformOptions(),
                 'unsigned' => $property->getUnsigned(),
             ];
+
+            if (null !== $property->getDefaultValue() && \is_scalar($property->getDefaultValue())) {
+                $columnOptions['default'] = $property->getDefaultValue();
+            }
 
             if ($property->hasDescription()) {
                 $columnOptions['comment'] = $property->getDescription();
