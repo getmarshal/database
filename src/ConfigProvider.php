@@ -50,6 +50,7 @@ final class ConfigProvider
     private function getCommands(): array
     {
         return [
+            Command\DescribeMigrationCommand::COMMAND_NAME => Command\DescribeMigrationCommand::class,
             Command\GenerateMigrationCommand::COMMAND_NAME => Command\GenerateMigrationCommand::class,
             Command\MigrationStatusCommand::COMMAND_NAME => Command\MigrationStatusCommand::class,
             Command\RollbackMigrationCommand::COMMAND_NAME => Command\RollbackMigrationCommand::class,
@@ -68,6 +69,7 @@ final class ConfigProvider
                 Command\SetupMigrationsCommand::class => Command\SetupMigrationsCommandFactory::class,
             ],
             "invokables" => [
+                Command\DescribeMigrationCommand::class => Command\DescribeMigrationCommand::class,
                 Command\MigrationStatusCommand::class => Command\MigrationStatusCommand::class,
                 Listener\MigrationEventsListener::class => Listener\MigrationEventsListener::class,
             ],
@@ -120,6 +122,7 @@ final class ConfigProvider
     {
         return [
             "label" => "Created At",
+            "default" => static fn (): \DateTimeImmutable => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
             "description" => "Entry creation time",
             "name" => "created_at",
             "type" => "datetimetz_immutable",
@@ -211,6 +214,7 @@ final class ConfigProvider
     {
         return [
             "label" => "Updated At",
+            "default" => static fn (): \DateTimeImmutable => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
             "description" => "Entry last updated time",
             "name" => "updated_at",
             "type" => "datetimetz_immutable",

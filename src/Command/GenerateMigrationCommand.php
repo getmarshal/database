@@ -81,12 +81,17 @@ class GenerateMigrationCommand extends Command
             return Command::FAILURE;
         }
 
-        // normalize the name
-        $normalizedName = $this->normalizeMigrationName($name);
+        if (true === MigrationRepository::nameExists($name)) {
+            $io->error(\sprintf(
+                "Migration with name %s already exists. Use a different name",
+                $name
+            ));
+            return Command::FAILURE;
+        }
 
         // save the migration
         $migration = MigrationRepository::save([
-            ConfigProvider::MIGRATION_NAME => $normalizedName,
+            ConfigProvider::MIGRATION_NAME => $name,
             ConfigProvider::MIGRATION_DATABASE => $database,
             ConfigProvider::MIGRATION_DIFF => \serialize($diff),
         ]);
@@ -95,14 +100,7 @@ class GenerateMigrationCommand extends Command
             return Command::FAILURE;
         }
 
-        $io->success("Migration $normalizedName generated");
+        $io->success("Migration $name generated");
         return Command::SUCCESS;
-    }
-
-    private function normalizeMigrationName(string $name): string
-    {
-        $replaced = \str_replace(' ', '_', $name);
-        $timestamp = (new \DateTime())->format('Y-m-d-H-i-s');
-        return "$timestamp-$replaced";
     }
 }

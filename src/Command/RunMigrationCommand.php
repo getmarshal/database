@@ -4,8 +4,11 @@ declare(strict_types= 1);
 
 namespace Marshal\Database\Command;
 
-use Doctrine\DBAL\Schema\SchemaDiff;
-use Marshal\Database\DatabaseManager;
+use Marshal\Database\ConfigProvider;
+use Marshal\Database\Event\MigrationTrait;
+use Marshal\Database\Event\RunMigrationEvent;
+use Marshal\Database\Repository\MigrationRepository;
+use Marshal\Utils\Trait\CommandInputValidatorTrait;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -15,7 +18,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class RunMigrationCommand extends Command
 {
-    public const string COMMAND_NAME = "migration:run";
+    use CommandInputValidatorTrait;
+    use MigrationTrait;
+
+    public const string COMMAND_NAME = "database:run-migration";
 
     public function __construct(private EventDispatcherInterface $eventDispatcher)
     {
@@ -28,94 +34,42 @@ final class RunMigrationCommand extends Command
             name: "name",
             shortcut: null,
             mode: InputOption::VALUE_REQUIRED,
-            description: "The name of the migration i.e it's config key"
+            description: "The name of the migration"
         );
-        $this->setDescription('Execute one or more pending migrations');
+        $this->setDescription('Execute a pending migrations');
     }
 
     public function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io = new SymfonyStyle($input, $output);
-
         // validate the input
-        $input->validate();
+        $this->validateInput($input);
+
+        $io = new SymfonyStyle($input, $output);
 
         // get details
         $name = $input->getOption('name');
 
         // get the migration
-        $connection = DatabaseManager::getConnection();
-        $queryBuilder = $connection->createQueryBuilder();
-        $migration = $queryBuilder
-            ->select('m.*')
-            ->from('migration', 'm')
-            ->where($queryBuilder->expr()->eq(
-                'name',
-                $queryBuilder->createNamedParameter($name)
-            ))
-            ->setMaxResults(1)
-            ->executeQuery()
-            ->fetchAssociative();
-
-        if (empty($migration)) {
+        $migration = MigrationRepository::get($name);
+        if ($migration->isEmpty()) {
             $io->error("Migration $name not found");
             return Command::FAILURE;
         }
 
-        $diff = \unserialize($migration['diff']);
-        if (! $diff instanceof SchemaDiff) {
-            $io->error("Invalid migration.");
-            return Command::FAILURE;
-        }
-
+        $event = new RunMigrationEvent($migration);
         try {
-            $dbConnection = DatabaseManager::getConnection($migration['db']);
+            $this->eventDispatcher->dispatch($event); 
         } catch (\Throwable $e) {
             $io->error($e->getMessage());
             return Command::FAILURE;
         }
 
-        $migrationStatements = $dbConnection->getDatabasePlatform()->getAlterSchemaSQL($diff);
-        $io->info($migrationStatements);
-        $proceed = $io->ask("Proceed with this migration? y/n");
-        if ($proceed !== 'y') {
-            $io->info("Migration aborted");
-            return Command::SUCCESS;
-        }
-
         // update migration table
-        $update = $queryBuilder->update('migration')
-            ->set('status', $queryBuilder->createNamedParameter(1))
-            ->set('updated_at', $queryBuilder->createNamedParameter((new \DateTime())->format('c')))
-            ->where('id', $queryBuilder->createNamedParameter($migration['id']))
-            ->executeStatement();
-        if (empty($update)) {
-            $io->error("An error occurred. Migration aborted");
-            return Command::FAILURE;
-        }
-
-        // run the migration
-        $failedStatements = [];
-        $reasons = [];
-        foreach ($migrationStatements as $statement) {
-            try {
-                $dbConnection->executeStatement($statement);
-            } catch (\Throwable $e) {
-                $failedStatements[] = $statement;
-                $reasons[] = $e->getMessage();
-                continue;
-            }
-        }
-
-        if (! empty($failedStatements)) {
-            $io->error("The following statements failed to execute");
-            $io->error($failedStatements);
-            $io->error($reasons);
-        }
+        MigrationRepository::updateMigrationOnCompletion($migration);
 
         $io->success(\sprintf(
             "Migration %s on database %s successfully run",
-            $name, $migration['db']
+            $name, $this->getMigrationDatabase($migration)
         ));
 
         return Command::SUCCESS;

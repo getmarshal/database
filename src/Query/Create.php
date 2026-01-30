@@ -8,7 +8,6 @@ use Marshal\Database\Hydrator\TypeInputHydrator;
 use Marshal\Database\Query;
 use Marshal\Database\QueryBuilder;
 use Marshal\Database\Schema\Type;
-use Marshal\Utils\Logger\LoggerManager;
 
 final class Create extends Query
 {
@@ -31,6 +30,11 @@ final class Create extends Query
         } catch (\Throwable $e) {
             throw new Exception\DatabaseQueryException($e, $query);
         }
+
+        // update the autoincrement property
+        $this->type->getAutoIncrement()->setValue(
+            \intval($query->lastInsertId())
+        );
         
         return $this->type;
     }

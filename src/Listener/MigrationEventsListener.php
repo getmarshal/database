@@ -6,7 +6,9 @@ namespace Marshal\Database\Listener;
 
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\Table;
+use Marshal\Database\ConfigProvider;
 use Marshal\Database\Event\GenerateMigrationEvent;
+use Marshal\Database\Event\MigrationTrait;
 use Marshal\Database\Event\RollbackMigrationEvent;
 use Marshal\Database\Event\RunMigrationEvent;
 use Marshal\Database\Event\SetupMigrationsEvent;
@@ -18,6 +20,8 @@ use Marshal\Utils\Logger\LoggerManager;
 
 final class MigrationEventsListener
 {
+    use MigrationTrait;
+
     public function onGenerateMigrationEvent(GenerateMigrationEvent $event): void
     {
         $database = $event->getDatabase();
@@ -26,13 +30,15 @@ final class MigrationEventsListener
         if ($event->isTypeMigration()) {
             $schema = new Schema();
             $type = TypeManager::get($event->getTypeIdentifier());
+
+            // migrations for a new type
             if (! $dbalSchema->tableExists($type->getTable())) {
                 $this->buildDatabaseType($schema, $type);
                 $event->setDiff($dbalSchema->createComparator()->compareSchemas(new Schema(), $schema));
                 return;
             }
 
-            $definitions = [$type];
+            // migrations for an existing type
             foreach ($dbalSchema->introspectSchema()->getTables() as $table) {
                 if ($table->getName() === $type->getTable()) {
                     $this->buildDatabaseType($schema, $type);
@@ -40,7 +46,14 @@ final class MigrationEventsListener
                     return;
                 }
             }
+
+            // ostensibly, no type was found
+            LoggerManager::get()->warning(\sprintf(
+                "Migrations for type %s not found",
+                $event->getTypeIdentifier()
+            ));
         } else {
+            // generate migrations for an entire database
             $definitions = [];
             $schemaConfig = Config::get('schema');
             foreach ($schemaConfig['types'] ?? [] as $name => $typeConfig) {
@@ -48,8 +61,6 @@ final class MigrationEventsListener
                     continue;
                 }
 
-                // if ($event->isTypeMigration())
-                $type = TypeManager::get($name);
                 $definitions[$name] = TypeManager::get($name);
             }
 
@@ -67,6 +78,42 @@ final class MigrationEventsListener
 
     public function onRunMigrationEvent(RunMigrationEvent $event): void
     {
+        $migration = $event->getMigration();
+
+        // prepare target database
+        $connection = DatabaseManager::getConnection(
+            $this->getMigrationDatabase($migration)
+        );
+
+        // get migration statements
+        $diff = $this->getMigrationDiff($migration);
+        $statements = $connection->getDatabasePlatform()->getAlterSchemaSQL($diff);
+
+        // execute statements
+        $failedStatements = [];
+        $reasons = [];
+        foreach ($statements as $statement) {
+            try {
+                $connection->executeStatement($statement);
+            } catch (\Throwable $e) {
+                $failedStatements[] = $statement;
+                $reasons[] = $e->getMessage();
+                continue;
+            }
+        }
+
+        if (! empty($failedStatements)) {
+            LoggerManager::get()->error(
+                \sprintf(
+                    "Failed to execute one or more statements for migration %s",
+                    $migration->getProperty(ConfigProvider::MIGRATION_NAME)->getValue()
+                ),
+                [
+                    'statements' => $failedStatements,
+                    'reasons' => $reasons
+                ]);
+            throw new \RuntimeException("Failed to execute one or more migration statements");
+        }
     }
 
     public function onSetupMigrationsEvent(SetupMigrationsEvent $event): void
@@ -79,7 +126,7 @@ final class MigrationEventsListener
         }
 
         // create the migrations table
-        $type = TypeManager::get('database::migration');
+        $type = TypeManager::get(ConfigProvider::MIGRATION_TYPE);
         if ($connection->createSchemaManager()->tableExists($type->getTable())) {
             LoggerManager::get()->info("Migrations already setup");
             return;

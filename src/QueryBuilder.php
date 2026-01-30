@@ -18,4 +18,9 @@ final class QueryBuilder extends DBALQueryBuilder
     {
         return $this->connection->getDatabasePlatform();
     }
+
+    public function lastInsertId(): int|string
+    {
+        return $this->connection->lastInsertId();
+    }
 }
