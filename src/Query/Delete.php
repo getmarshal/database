@@ -19,7 +19,7 @@ final class Delete extends Query
         return $query->executeStatement();
     }
 
-    public function from(string $schema): static
+    public function schema(string $schema): static
     {
         $this->type = TypeManager::get($schema);
         return $this;

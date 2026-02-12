@@ -7,7 +7,6 @@ namespace Marshal\Database\Command;
 use Marshal\Database\ConfigProvider;
 use Marshal\Database\DatabaseManager;
 use Marshal\Database\Event\GenerateMigrationEvent;
-use Marshal\Database\Event\SaveMigrationEvent;
 use Marshal\Database\Repository\MigrationRepository;
 use Marshal\Utils\Trait\CommandInputValidatorTrait;
 use Psr\EventDispatcher\EventDispatcherInterface;

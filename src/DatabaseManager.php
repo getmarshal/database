@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Marshal\Database;
 
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
+use Marshal\Database\Query\Middleware\HighPerfSqlite;
 use Marshal\Utils\Config;
 
 final class DatabaseManager
@@ -36,14 +38,19 @@ final class DatabaseManager
         // @todo validate db config
 
         // first time engaging a sqlite db?
+        $middlewares = [];
         $firstConnect = false;
         if ($config[$database]['driver'] === "pdo_sqlite") {
             if (isset($config[$database]['path'])) {
                 if (! \file_exists($config[$database]['path'])) {
                     $firstConnect = true;
+                    $middlewares[] = new HighPerfSqlite();
                 }
             }
         }
+
+        $dbalConfig = new Configuration();
+        $dbalConfig->setMiddlewares($middlewares);
 
         // wrap the connection
         if (! isset($config[$database]["wrapperClass"])) {
@@ -51,7 +58,7 @@ final class DatabaseManager
         }
         
         // get the connection
-        $connection = DriverManager::getConnection($config[$database]);
+        $connection = DriverManager::getConnection($config[$database], $dbalConfig);
         
         // @todo put pragma settings in config and allow override defaults
         // @todo wrap these in DBAL Driver middleware

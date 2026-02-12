@@ -4,7 +4,6 @@ declare(strict_types= 1);
 
 namespace Marshal\Database\Command;
 
-use Marshal\Database\ConfigProvider;
 use Marshal\Database\Event\MigrationTrait;
 use Marshal\Database\Event\RunMigrationEvent;
 use Marshal\Database\Repository\MigrationRepository;
