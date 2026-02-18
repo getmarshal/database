@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query\Trait;
 
-use Marshal\Database\Query;
 use Marshal\Database\QueryBuilder;
 use Marshal\Database\Schema\Type;
 use Marshal\Utils\Config;
@@ -18,7 +17,7 @@ trait WhereTrait
     public function where(
         array|string $identifier,
         mixed $value,
-        string $expression = Query::WHERE_EQ
+        string $expression = QueryBuilder::WHERE_EQ
     ): static {
         $this->where[] = [
             'identifier' => \is_array($identifier) ? \implode('__', $identifier) : $identifier,
@@ -33,7 +32,7 @@ trait WhereTrait
     {
         $expressions = Config::get('database_expressions')['where'];
         foreach ($this->where as $where) {
-            if ($where['expression'] === Query::WHERE_RAW) {
+            if ($where['expression'] === QueryBuilder::WHERE_RAW) {
                 $this->applyWhereRawExpression($queryBuilder, $where['identifier'], $where['value']);
                 continue;
             }
@@ -48,14 +47,14 @@ trait WhereTrait
 
             $expression = new $expressions[$where['expression']];
             if (FALSE !== \strpos($where['identifier'], '__')) {
-                [$relation, $property] = $this->applyWhereRelationExpression($this->type, $where['identifier']);                
+                [$relation, $property] = $this->applyWhereRelationExpression($type, $where['identifier']);                
                 $table = $relation->getAlias();
                 $column = "{$relation->getAlias()}.{$property->getName()}";
             } else {
                 if (! $type->hasProperty($where['identifier'])) {
                     LoggerManager::get()->warning(\sprintf(
                         "Invalid where query identifier: Type %s has no property %s",
-                        $this->type->getIdentifier(),
+                        $type->getIdentifier(),
                         $where['identifier']
                     ));
                     continue;
@@ -81,6 +80,7 @@ trait WhereTrait
         if (\is_array($value)) {
             foreach ($value as $k => $v) {
                 $value = $v instanceof Type ? $v->getAutoIncrement()->getValue() : $v;
+                // $value = $value instanceof Item ? $value->getType()->getAutoIncrement()->getValue() : $value;
                 $queryBuilder->setParameter($k, $value);
             }
         }

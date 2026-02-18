@@ -5,13 +5,20 @@ declare(strict_types=1);
 namespace Marshal\Database\Query;
 
 use Marshal\Database\Query;
-use Marshal\Database\Query\Trait\WhereTrait;
 use Marshal\Database\QueryBuilder;
-use Marshal\Database\Schema\TypeManager;
+use Marshal\Database\Schema\Type;
+use Marshal\Database\Query\Trait\WhereTrait;
 
-final class Delete extends Query
+abstract class Delete extends Query
 {
     use WhereTrait;
+
+    abstract public static function from(string $target): static;
+    abstract public static function target(object $target): int|string;
+
+    public function __construct(private Type $type)
+    {
+    }
 
     public function execute(): int|string
     {
@@ -19,15 +26,9 @@ final class Delete extends Query
         return $query->executeStatement();
     }
 
-    public function schema(string $schema): static
-    {
-        $this->type = TypeManager::get($schema);
-        return $this;
-    }
-
     protected function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->createQueryBuilder();
+        $queryBuilder = $this->createQueryBuilder($this->type->getDatabase());
         $queryBuilder->delete($this->type->getTable());
         $this->applyWhereExpressions($queryBuilder, $this->type);
 

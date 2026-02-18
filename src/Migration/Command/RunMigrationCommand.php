@@ -2,11 +2,10 @@
 
 declare(strict_types= 1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
-use Marshal\Database\Event\MigrationTrait;
-use Marshal\Database\Event\RunMigrationEvent;
-use Marshal\Database\Repository\MigrationRepository;
+use Marshal\Database\Migration\Event\RunMigrationEvent;
+use Marshal\Database\Migration\Repository\MigrationRepository;
 use Marshal\Utils\Trait\CommandInputValidatorTrait;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
@@ -18,7 +17,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 final class RunMigrationCommand extends Command
 {
     use CommandInputValidatorTrait;
-    use MigrationTrait;
 
     public const string COMMAND_NAME = "database:run-migration";
 
@@ -68,7 +66,7 @@ final class RunMigrationCommand extends Command
 
         $io->success(\sprintf(
             "Migration %s on database %s successfully run",
-            $name, $this->getMigrationDatabase($migration)
+            $name, $migration->getName()
         ));
 
         return Command::SUCCESS;

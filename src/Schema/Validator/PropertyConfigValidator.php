@@ -84,9 +84,9 @@ class PropertyConfigValidator extends AbstractValidator
             return FALSE;
         }
 
-        if (! $this->isValidPropertyIdentifier($value)) {
-            return FALSE;
-        }
+        // if (! $this->isValidPropertyIdentifier($value)) {
+        //     return FALSE;
+        // }
 
         if (isset($config['index'])) {
             if (! \is_array($config['index']) && ! \is_bool($config['index'])) {

@@ -13,17 +13,16 @@ use Laminas\Validator\ValidatorChain;
 use Laminas\Validator\ValidatorPluginManager;
 use Marshal\Utils\Config;
 
-class Type
+final class Type
 {
-    private array $relations = [];
-    private array $validationGroup = [];
-    private array $validationMessages = [];
-    
     /**
      * @var array<string, Property>
      */
     private array $properties = [];
+    private array $relations = [];
     private TypeConfig $typeConfig;
+    private array $validationGroup = [];
+    private array $validationMessages = [];
 
     final public function __construct(private readonly string $identifier, private readonly array $config)
     {
@@ -95,9 +94,10 @@ class Type
 
         // search local properties
         foreach ($this->getRelations() as $relation) {
+            $localProperty = $this->getProperty($relation->getLocalProperty());
             if (
-                $identifier === $relation->getLocalProperty()->getName() ||
-                $identifier === $relation->getLocalProperty()->getIdentifier()
+                $identifier === $localProperty->getName() ||
+                $identifier === $localProperty->getIdentifier()
             ) {
                 return $relation;
             }
@@ -144,17 +144,6 @@ class Type
         return FALSE;
     }
 
-    public function hasRelation(): bool
-    {
-        return empty($this->relations) ? false : true;
-    }
-
-    public function isEmpty(): bool
-    {
-        // check for a non-null autoincrement property
-        return null === $this->getAutoIncrement()->getValue();
-    }
-
     public function isRelationProperty(string $identifier): bool
     {
         if (! $this->hasProperty($identifier)) {
@@ -162,9 +151,10 @@ class Type
         }
 
         foreach ($this->getRelations() as $relation) {
+            $localProperty = $this->getProperty($relation->getLocalProperty());
             if (
-                $relation->getLocalProperty()->getIdentifier() === $identifier ||
-                $relation->getLocalProperty()->getName() === $identifier ||
+                $localProperty->getIdentifier() === $identifier ||
+                $localProperty->getName() === $identifier ||
                 $relation->getAlias() === $identifier
             ) {
                 return TRUE;

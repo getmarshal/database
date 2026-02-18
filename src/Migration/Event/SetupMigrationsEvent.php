@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Event;
+namespace Marshal\Database\Migration\Event;
 
 use Marshal\Utils\Trait\ErrorMessagesTrait;
 

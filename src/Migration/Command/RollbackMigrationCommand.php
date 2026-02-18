@@ -2,11 +2,10 @@
 
 declare(strict_types= 1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
 use Doctrine\DBAL\Schema\SchemaDiff;
 use Marshal\Database\DatabaseManager;
-use Marshal\Utils\Database\ConnectionManager;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;

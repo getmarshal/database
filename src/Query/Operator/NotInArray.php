@@ -7,7 +7,7 @@ namespace Marshal\Database\Query\Operator;
 use Marshal\Database\QueryBuilder;
 use Marshal\Database\Schema\Property;
 
-class InArray implements OperatorInterface
+class NotInArray implements OperatorInterface
 {
     public function __invoke(
         QueryBuilder $queryBuilder,
@@ -15,7 +15,7 @@ class InArray implements OperatorInterface
         string $column
     ): void {
         // @todo validate property value is list of strings
-        $queryBuilder->andWhere($queryBuilder->expr()->in(
+        $queryBuilder->andWhere($queryBuilder->expr()->notIn(
             $column,
             \array_map(
                 static fn (string $property): string => "'$property'",

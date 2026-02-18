@@ -2,17 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Listener;
+namespace Marshal\Database\Migration\Listener;
 
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\Table;
-use Marshal\Database\ConfigProvider;
-use Marshal\Database\Event\GenerateMigrationEvent;
-use Marshal\Database\Event\MigrationTrait;
-use Marshal\Database\Event\RollbackMigrationEvent;
-use Marshal\Database\Event\RunMigrationEvent;
-use Marshal\Database\Event\SetupMigrationsEvent;
 use Marshal\Database\DatabaseManager;
+use Marshal\Database\Migration\Event\GenerateMigrationEvent;
+use Marshal\Database\Migration\Event\MigrationTrait;
+use Marshal\Database\Migration\Event\RollbackMigrationEvent;
+use Marshal\Database\Migration\Event\RunMigrationEvent;
 use Marshal\Database\Schema\Type;
 use Marshal\Database\Schema\TypeManager;
 use Marshal\Utils\Config;
@@ -81,9 +79,7 @@ final class MigrationEventsListener
         $migration = $event->getMigration();
 
         // prepare target database
-        $connection = DatabaseManager::getConnection(
-            $this->getMigrationDatabase($migration)
-        );
+        $connection = DatabaseManager::getConnection($migration->getDatabase());
 
         // get migration statements
         $diff = $this->getMigrationDiff($migration);
@@ -106,35 +102,13 @@ final class MigrationEventsListener
             LoggerManager::get()->error(
                 \sprintf(
                     "Failed to execute one or more statements for migration %s",
-                    $migration->getProperty(ConfigProvider::MIGRATION_NAME)->getValue()
+                    $migration->getName()
                 ),
                 [
                     'statements' => $failedStatements,
                     'reasons' => $reasons
                 ]);
             throw new \RuntimeException("Failed to execute one or more migration statements");
-        }
-    }
-
-    public function onSetupMigrationsEvent(SetupMigrationsEvent $event): void
-    {
-        try {
-            $connection = DatabaseManager::getConnection();
-        } catch (\Throwable $e) {
-            LoggerManager::get()->error($e->getMessage());
-            return;
-        }
-
-        // create the migrations table
-        $type = TypeManager::get(ConfigProvider::MIGRATION_TYPE);
-        if ($connection->createSchemaManager()->tableExists($type->getTable())) {
-            LoggerManager::get()->info("Migrations already setup");
-            return;
-        }
-
-        $schema = $this->buildContentSchema([$type]);
-        foreach ($schema->toSql($connection->getDatabasePlatform()) as $createStmt) {
-            $connection->executeStatement($createStmt);
         }
     }
 
@@ -198,13 +172,13 @@ final class MigrationEventsListener
         foreach ($type->getRelations() as $relation)  {
             $table->addForeignKeyConstraint(
                 foreignTableName: $relation->getRelationType()->getTable(),
-                localColumnNames: [$relation->getLocalProperty()->getName()],
+                localColumnNames: [$type->getProperty($relation->getLocalProperty())->getName()],
                 foreignColumnNames: [$relation->getRelationProperty()->getName()],
                 options: [
                     'onUpdate' => $relation->getOnUpdate(),
                     'onDelete' => $relation->getOnDelete(),
                 ],
-                name: \strtolower("fk_{$type->getTable()}_{$relation->getIdentifier()}")
+                name: $relation->getIdentifier()
             );
         }
 
@@ -215,7 +189,7 @@ final class MigrationEventsListener
     {
         $schema = new Schema();
         foreach ($definition as $type) {
-            if (! $type instanceof Type) {
+            if (! $type instanceof Item) {
                 continue;
             }
             

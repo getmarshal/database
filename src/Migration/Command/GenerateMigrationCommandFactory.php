@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;

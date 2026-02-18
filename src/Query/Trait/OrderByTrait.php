@@ -61,9 +61,10 @@ trait OrderByTrait
         $parts = \explode('__', $identifier);
         foreach ($parts as $index => $part) {
             foreach ($type->getRelations() as $relation) {
+                $localProperty = $type->getProperty($relation->getLocalProperty());
                 if (
-                    $relation->getLocalProperty()->getIdentifier() !== $part &&
-                    $relation->getLocalProperty()->getName() !== $part
+                    $localProperty->getIdentifier() !== $part &&
+                    $localProperty->getName() !== $part
                 ) {
                     $this->orderRelation($relation->getRelationType(), $queryBuilder, $identifier, $direction, $duplicates);
                 } else {

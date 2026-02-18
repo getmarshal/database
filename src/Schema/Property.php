@@ -54,6 +54,13 @@ class Property
             $value = \intval($value['id']);
         }
 
+        if (\is_object($value) && \method_exists($value, 'getType')) {
+            $type = $value->getType();
+            if ($type instanceof Type) {
+                $value = $type->getAutoIncrement()->getValue();
+            }
+        }
+
         return $this->getDatabaseType()->convertToDatabaseValue($value, $databasePlatform);
     }
 
@@ -75,20 +82,6 @@ class Property
     public function getDatabaseTypeName(): string
     {
         return $this->typeName;
-    }
-
-    public function getDatabaseValue(AbstractPlatform $databasePlatform): mixed
-    {
-        $value = $this->value;
-        if ($value instanceof Type) {
-            $value = $value->getAutoIncrement()->getValue();
-        }
-
-        if ($this->typeName === 'bigint' && \is_array($value) && isset($value['id'])) {
-            $value = \intval($value['id']);
-        }
-
-        return $this->getDatabaseType()->convertToDatabaseValue($value, $databasePlatform);
     }
 
     public function getDefaultValue(): mixed

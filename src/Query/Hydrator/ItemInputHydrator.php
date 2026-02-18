@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Hydrator;
+namespace Marshal\Database\Query\Hydrator;
 
 use Marshal\Database\Schema\Type;
 
-final class TypeInputHydrator
+final class ItemInputHydrator
 {
     public function hydrate(Type $type, array $input): void
     {

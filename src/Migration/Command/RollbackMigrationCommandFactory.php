@@ -2,16 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
 use Psr\Container\ContainerInterface;
-use Psr\EventDispatcher\EventDispatcherInterface;
 
 final class RollbackMigrationCommandFactory
 {
     public function __invoke(ContainerInterface $container): RollbackMigrationCommand
     {
-        $dispatcher = $container->get(EventDispatcherInterface::class);
         return new RollbackMigrationCommand();
     }
 }

@@ -9,22 +9,16 @@ final class TypeRelation
     public const string JOIN_INNER = "joinInner";
     public const string JOIN_LEFT = "joinLeft";
     public const string JOIN_RIGHT = "joinRight";
-
     public const array UPDATE_DELETE_OPTIONS = ['CASCADE', 'SET NULL'];
+    private Type $relationType;
 
-    public function __construct(
-        private Type $localType,
-        private Property $localProperty,
-        private Type $relationType,
-        private Property $relationProperty,
-        private readonly string $identifier,
-        private readonly array $config
-    ) {
+    public function __construct(private readonly string $identifier, private readonly array $config)
+    {
     }
 
     public function getAlias(): string
     {
-        return $this->config['relationAlias'] ?? $this->relationType->getTable();
+        return $this->config['relationAlias'] ?? $this->getRelationType()->getTable();
     }
 
     public function getJoinType(): string
@@ -32,9 +26,9 @@ final class TypeRelation
         return $this->config['joinType'] ?? self::JOIN_LEFT;
     }
 
-    public function getLocalProperty(): Property
+    public function getLocalProperty(): string
     {
-        return $this->localProperty;
+        return $this->config['localProperty'];
     }
 
     public function getOnDelete(): string
@@ -69,12 +63,12 @@ final class TypeRelation
         return $this->config['onUpdate'];
     }
 
-    public function getRelationCondition(): string
+    public function getRelationCondition(Type $localType): string
     {
         return \sprintf(
             "%s.%s = %s.%s",
-            $this->localType->getTable(),
-            $this->localProperty->getName(),
+            $localType->getTable(),
+            $localType->getProperty($this->getLocalProperty())->getName(),
             $this->getAlias(),
             $this->getRelationProperty()->getName(),
         );
@@ -82,12 +76,21 @@ final class TypeRelation
 
     public function getRelationProperty(): Property
     {
-        return $this->relationProperty;
+        return $this->getRelationType()->getProperty($this->config['relationProperty']);
     }
 
     public function getRelationType(): Type
     {
+        if (! isset($this->relationType)) {
+            $this->relationType = TypeManager::get($this->config['relationType']);
+        }
+
         return $this->relationType;
+    }
+
+    public function getRelationTypeClass(): string
+    {
+        return $this->config['relationType'];
     }
 
     public function getIdentifier(): string

@@ -36,10 +36,7 @@ final class TypeManager
         }
 
         $config = $typesConfig[$identifier];
-        $type = \class_exists($identifier)
-            ? new $identifier($identifier, $config)
-            : new Type($identifier, $config);
-        \assert($type instanceof Type);
+        $type = new Type($identifier, $config);
  
         // add type properties
         $propsConfig = $schema['properties'] ?? [];
@@ -47,23 +44,6 @@ final class TypeManager
         foreach ($config['properties'] ?? [] as $propertyIdentifier) {
             if (! isset($propsConfig[$propertyIdentifier])) {
                 throw new Exception\PropertyNotFoundException($propertyIdentifier);
-            }
-
-            // check if property has parent
-            // @todo remove property inheritance
-            if (isset($propsConfig[$propertyIdentifier]['inherits'])) {
-                $parent = $propsConfig[$propertyIdentifier]['inherits'];
-                if (! isset($propsConfig[$parent])) {
-                    throw new Exception\PropertyNotFoundException($parent);
-                }
-
-                $mergedConfig = $propsConfig[$parent];
-                foreach ($propsConfig[$propertyIdentifier]['override'] ?? [] as $key => $value) {
-                    $mergedConfig[$key] = $value;
-                }
-
-                $propsConfig[$propertyIdentifier] = $mergedConfig;
-                $propertyValidator = new Validator\PropertyConfigValidator($propsConfig, $typesConfig);
             }
 
             // validate property config
@@ -76,12 +56,7 @@ final class TypeManager
 
         // add type relations
         foreach ($config['relations'] ?? [] as $relationIdentifier => $relationConfig) {
-            $relationType = self::get($relationConfig['relationType']);
             $type->addRelation(new TypeRelation(
-                localType: $type,
-                localProperty: $type->getProperty($relationConfig['localProperty']),
-                relationType: $relationType,
-                relationProperty: $relationType->getProperty($relationConfig['relationProperty']),
                 identifier: $relationIdentifier,
                 config: $relationConfig
             ));

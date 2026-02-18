@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
-use Marshal\Database\ConfigProvider;
 use Marshal\Database\DatabaseManager;
-use Marshal\Database\Event\GenerateMigrationEvent;
-use Marshal\Database\Repository\MigrationRepository;
+use Marshal\Database\Migration\Event\GenerateMigrationEvent;
+use Marshal\Database\Migration\MigrationItem;
+use Marshal\Database\Migration\Repository\MigrationRepository;
 use Marshal\Utils\Trait\CommandInputValidatorTrait;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
@@ -90,9 +90,9 @@ class GenerateMigrationCommand extends Command
 
         // save the migration
         $migration = MigrationRepository::save([
-            ConfigProvider::MIGRATION_NAME => $name,
-            ConfigProvider::MIGRATION_DATABASE => $database,
-            ConfigProvider::MIGRATION_DIFF => \serialize($diff),
+            MigrationItem::MIGRATION_NAME => $name,
+            MigrationItem::MIGRATION_DATABASE => $database,
+            MigrationItem::MIGRATION_DIFF => \serialize($diff),
         ]);
         if ($migration->isEmpty()) {
             $io->error("Could not save migration");

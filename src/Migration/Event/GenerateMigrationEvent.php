@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Event;
+namespace Marshal\Database\Migration\Event;
 
 use Doctrine\DBAL\Schema\SchemaDiff;
-use Doctrine\DBAL\Schema\TableDiff;
 
 class GenerateMigrationEvent
 {
@@ -54,10 +53,6 @@ class GenerateMigrationEvent
     public function setDiff(SchemaDiff $diff): void
     {
         $this->diff = $diff;
-    }
-
-    public function setTableDiff(TableDiff $diff): void
-    {
     }
 
     public function setTypeIdentifier(string $typeIdentifier): void

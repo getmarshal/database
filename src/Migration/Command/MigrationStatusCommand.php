@@ -2,11 +2,13 @@
 
 declare(strict_types= 1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
-use Marshal\Database\ConfigProvider;
 use Marshal\Database\DatabaseManager;
-use Marshal\Database\Query;
+use Marshal\Database\Migration\MigrationItem;
+use Marshal\Database\Migration\Repository\MigrationRepository;
+use Marshal\Database\Query\Hydrator\ItemInputHydrator;
+use Marshal\Database\Schema\TypeManager;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -45,9 +47,7 @@ final class MigrationStatusCommand extends Command
         }
 
         // fetch all migrations
-        $data = Query::from(ConfigProvider::MIGRATION_TYPE)
-            ->orderBy(ConfigProvider::MIGRATION_CREATED_AT, 'DESC')
-            ->fetchAll();        
+        $data = MigrationRepository::getMigrations();
         if (empty($data)) {
             $io->success("No pending migrations");
             return Command::SUCCESS;
@@ -55,16 +55,16 @@ final class MigrationStatusCommand extends Command
 
         $result = [];
         foreach ($data as $row) {
-            $row['status'] = $row['status'] == 1
+            $status = $row['migration__status'] == true || $row['migration__status'] === 1
                 ? 'Done'
                 : 'Pending';
 
             $result[] = [
-                'migration' => $row['name'],
-                'database' => $row['db'],
-                'status' => $row['status'],
-                'created' => $row['created_at']->format('c'),
-                'executed' => $row['updated_at'] ? $row['updatedat']->format('c') : null,
+                'migration' => $row['migration__name'],
+                'database' => $row['migration__db'],
+                'status' => $status,
+                'created' => $row['migration__created_at'],
+                'executed' => $row['migration__updated_at'],
             ];
         }
 

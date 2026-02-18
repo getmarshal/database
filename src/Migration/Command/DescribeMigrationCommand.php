@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Command;
+namespace Marshal\Database\Migration\Command;
 
 use Marshal\Database\DatabaseManager;
-use Marshal\Database\Event\MigrationTrait;
-use Marshal\Database\Repository\MigrationRepository;
+use Marshal\Database\Migration\Event\MigrationTrait;
+use Marshal\Database\Migration\Repository\MigrationRepository;
 use Marshal\Utils\Trait\CommandInputValidatorTrait;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -50,11 +50,11 @@ final class DescribeMigrationCommand extends Command
         $diff = $this->getMigrationDiff($migration);
 
         // get the statements
-        $connection = DatabaseManager::getConnection($this->getMigrationDatabase($migration));
+        $connection = DatabaseManager::getConnection($migration->getDatabase());
         $statements = $connection->getDatabasePlatform()->getAlterSchemaSQL($diff);
 
         // display the statements
-        $io->info("Database: {$this->getMigrationDatabase($migration)}");
+        $io->info("Database: {$migration->getDatabase()}");
         $io->info($statements);
 
         return Command::SUCCESS;

@@ -1,114 +1,84 @@
 <?php
 
+/* 
+Copyright (C) 2026 Collins Pamba
+
+This file is part of Marshal and Marshal is free software:
+you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version.
+*/
+
 declare(strict_types=1);
 
 namespace Marshal\Database;
 
+use Doctrine\DBAL\Types\Types;
 use Marshal\Utils\Random;
 
 final class ConfigProvider
 {
-    public const string MIGRATION_TYPE = "database::migration";
-    public const string MIGRATION_AUTO_ID = "database::migration-id";
-    public const string MIGRATION_CREATED_AT = "database::migration-createdat";
-    public const string MIGRATION_DATABASE = "database::migration-db";
-    public const string MIGRATION_DIFF = "database::migration-diff";
-    public const string MIGRATION_NAME = "database::migration-name";
-    public const string MIGRATION_STATUS = "database::migration-status";
-    public const string MIGRATION_TAG = "database::migration-tag";
-    public const string MIGRATION_UPDATED_AT = "database::migration-updatedat";
-
     public function __invoke(): array
     {
         return [
-            "commands" => $this->getCommands(),
+            "commands" => $this->getCommandsConfig(),
+            "dependencies" => $this->getDependenciesConfig(),
             "database_expressions" => $this->getExpressions(),
-            "dependencies" => $this->getDependencies(),
-            "events" => $this->getEventListeners(),
+            "events" => $this->getEventsConfig(),
             "filters" => [],
             "input_filters" => [],
             "messages" => $this->getMessagesConfig(),
-            "schema" => [
-                "properties" => [
-                    self::MIGRATION_AUTO_ID => $this->getPropertyId(),
-                    self::MIGRATION_CREATED_AT => $this->getPropertyCreatedAt(),
-                    self::MIGRATION_DATABASE => $this->getPropertyDatabase(),
-                    self::MIGRATION_DIFF => $this->getPropertyDiff(),
-                    self::MIGRATION_NAME => $this->getPropertyName(),
-                    self::MIGRATION_STATUS => $this->getPropertyStatus(),
-                    self::MIGRATION_TAG => $this->getPropertyUniqueAlphaNumericTag(),
-                    self::MIGRATION_UPDATED_AT => $this->getPropertyUpdatedAt(),
-                ],
-                "types" => [
-                    self::MIGRATION_TYPE => $this->getMigrationSchema(),
-                ],
-            ],
+            "schema" => $this->getSchemaConfig(),
             "validators" => [],
         ];
     }
 
-    private function getCommands(): array
+    private function getCommandsConfig(): array
     {
         return [
-            Command\DescribeMigrationCommand::COMMAND_NAME => Command\DescribeMigrationCommand::class,
-            Command\GenerateMigrationCommand::COMMAND_NAME => Command\GenerateMigrationCommand::class,
-            Command\MigrationStatusCommand::COMMAND_NAME => Command\MigrationStatusCommand::class,
-            Command\RollbackMigrationCommand::COMMAND_NAME => Command\RollbackMigrationCommand::class,
-            Command\RunMigrationCommand::COMMAND_NAME => Command\RunMigrationCommand::class,
-            Command\SetupMigrationsCommand::COMMAND_NAME => Command\SetupMigrationsCommand::class,
+            Migration\Command\DescribeMigrationCommand::COMMAND_NAME => Migration\Command\DescribeMigrationCommand::class,
+            Migration\Command\GenerateMigrationCommand::COMMAND_NAME => Migration\Command\GenerateMigrationCommand::class,
+            Migration\Command\MigrationStatusCommand::COMMAND_NAME => Migration\Command\MigrationStatusCommand::class,
+            Migration\Command\RollbackMigrationCommand::COMMAND_NAME => Migration\Command\RollbackMigrationCommand::class,
+            Migration\Command\RunMigrationCommand::COMMAND_NAME => Migration\Command\RunMigrationCommand::class,
+            Migration\Command\SetupMigrationsCommand::COMMAND_NAME => Migration\Command\SetupMigrationsCommand::class,
         ];
     }
 
-    private function getDependencies(): array
+    private function getDependenciesConfig(): array
     {
         return [
             "factories" => [
-                Command\GenerateMigrationCommand::class => Command\GenerateMigrationCommandFactory::class,
-                Command\RollbackMigrationCommand::class => Command\RollbackMigrationCommandFactory::class,
-                Command\RunMigrationCommand::class => Command\RunMigrationCommandFactory::class,
-                Command\SetupMigrationsCommand::class => Command\SetupMigrationsCommandFactory::class,
+                Migration\Command\GenerateMigrationCommand::class => Migration\Command\GenerateMigrationCommandFactory::class,
+                Migration\Command\RollbackMigrationCommand::class => Migration\Command\RollbackMigrationCommandFactory::class,
+                Migration\Command\RunMigrationCommand::class => Migration\Command\RunMigrationCommandFactory::class,
+                Migration\Command\SetupMigrationsCommand::class => Migration\Command\SetupMigrationsCommandFactory::class,
             ],
             "invokables" => [
-                Command\DescribeMigrationCommand::class => Command\DescribeMigrationCommand::class,
-                Command\MigrationStatusCommand::class => Command\MigrationStatusCommand::class,
-                Listener\MigrationEventsListener::class => Listener\MigrationEventsListener::class,
+                Migration\Command\DescribeMigrationCommand::class => Migration\Command\DescribeMigrationCommand::class,
+                Migration\Command\MigrationStatusCommand::class => Migration\Command\MigrationStatusCommand::class,
+                Migration\Listener\MigrationEventsListener::class => Migration\Listener\MigrationEventsListener::class,
             ],
         ];
     }
 
-    private function getEventListeners(): array
+    private function getEventsConfig(): array
     {
         return [
             "listeners" => [
-                Listener\MigrationEventsListener::class => [
-                    Event\GenerateMigrationEvent::class => [
+                Migration\Listener\MigrationEventsListener::class => [
+                    Migration\Event\GenerateMigrationEvent::class => [
                         "listener" => "onGenerateMigrationEvent",
                     ],
-                    Event\RollbackMigrationEvent::class => [
+                    Migration\Event\RollbackMigrationEvent::class => [
                         "listener" => "onRollbackMigrationEvent",
                     ],
-                    Event\RunMigrationEvent::class => [
+                    Migration\Event\RunMigrationEvent::class => [
                         "listener" => "onRunMigrationEvent",
                     ],
-                    Event\SetupMigrationsEvent::class => [
+                    Migration\Event\SetupMigrationsEvent::class => [
                         "listener" => "onSetupMigrationsEvent",
                     ],
                 ],
-            ],
-        ];
-    }
-
-    private function getExpressions(): array
-    {
-        return [
-            "where" => [
-                \Marshal\Database\Query::WHERE_EQ => Query\Operator\Eq::class,
-                \Marshal\Database\Query::WHERE_GT => Query\Operator\Gt::class,
-                \Marshal\Database\Query::WHERE_GTE => Query\Operator\Gte::class,
-                \Marshal\Database\Query::WHERE_INARRAY => Query\Operator\InArray::class,
-                \Marshal\Database\Query::WHERE_ISNULL => Query\Operator\IsNull::class,
-                \Marshal\Database\Query::WHERE_LT => Query\Operator\Lt::class,
-                \Marshal\Database\Query::WHERE_LTE => Query\Operator\Lte::class,
             ],
         ];
     }
@@ -118,128 +88,123 @@ final class ConfigProvider
         return [];
     }
 
-    private function getPropertyCreatedAt(): array
+    private function getExpressions(): array
     {
         return [
-            "label" => "Created At",
-            "default" => static fn (): \DateTimeImmutable => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
-            "description" => "Entry creation time",
-            "name" => "created_at",
-            "type" => "datetimetz_immutable",
-            "notnull" => true,
-            "index" => true,
-        ];
-    }
-
-    private function getPropertyDatabase(): array
-    {
-        return [
-            "label" => "Migration DB",
-            "description" => "Database name migration belongs to",
-            "name" => "db",
-            "index" => true,
-            "length" => 255,
-            "notnull" => true,
-            "type" => "string",
-        ];
-    }
-
-    private function getPropertyDiff(): array
-    {
-        return [
-            "label" => "Migration Diff",
-            "description" => "Serialized object containing a schema diff",
-            "name" => "diff",
-            "convertToPhpType" => false,
-            "notnull" => true,
-            "type" => "blob",
-        ];
-    }
-
-    private function getPropertyId(): array
-    {
-        return [
-            "autoincrement" => true,
-            "description" => "Autoincrementing integer ID",
-            "label" => "Auto ID",
-            "name" => "id",
-            "notnull" => true,
-            "type" => "bigint",
-        ];
-    }
-
-    private function getPropertyName(): array
-    {
-        return [
-            "label" => "Name",
-            "description" => "Entry name",
-            "name" => "name",
-            "notnull" => true,
-            "type" => "string",
-            "length" => 255,
-        ];
-    }
-
-    private function getPropertyStatus(): array
-    {
-        return [
-            "label" => "Migration Status",
-            "description" => "0 or 1 migration status indicator",
-            "name" => "status",
-            'type' => 'smallint',
-            'notnull' => true,
-            'default' => 0,
-            'index' => true,
-        ];
-    }
-
-    private function getPropertyUniqueAlphaNumericTag(): array
-    {
-        return [
-            "constraints" => [
-                "unique" => true,
+            "where" => [
+                QueryBuilder::WHERE_EQ => Query\Operator\Eq::class,
+                QueryBuilder::WHERE_GT => Query\Operator\Gt::class,
+                QueryBuilder::WHERE_GTE => Query\Operator\Gte::class,
+                QueryBuilder::WHERE_INARRAY => Query\Operator\InArray::class,
+                QueryBuilder::WHERE_ISNULL => Query\Operator\IsNull::class,
+                QueryBuilder::WHERE_LT => Query\Operator\Lt::class,
+                QueryBuilder::WHERE_LTE => Query\Operator\Lte::class,
+                QueryBuilder::WHERE_NOT_INARRAY => Query\Operator\NotInArray::class,
             ],
-            "default" => static fn (): string => Random::generateTag(),
-            "description" => "Entry unique alphanumeric identifier",
-            "index" => true,
-            "label" => "Unique Identifier",
-            "length" => 255,
-            "name" => "tag",
-            "notnull" => true,
-            "type" => "string",
         ];
     }
 
-    private function getPropertyUpdatedAt(): array
+    private function getSchemaConfig(): array
     {
         return [
-            "label" => "Updated At",
-            "default" => static fn (): \DateTimeImmutable => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
-            "description" => "Entry last updated time",
-            "name" => "updated_at",
-            "type" => "datetimetz_immutable",
-            "notnull" => true,
-            "index" => true,
+            "properties" => $this->getSchemaPropertiesConfig(),
+            "types" => $this->getSchemaTypesConfig(),
         ];
     }
 
-    private function getMigrationSchema(): array
+    private function getSchemaPropertiesConfig(): array
     {
         return [
-            "database" => "marshal::main",
-            "name" => "Migration",
-            "description" => "Migrations table",
-            "properties" => [
-                self::MIGRATION_AUTO_ID,
-                self::MIGRATION_NAME,
-                self::MIGRATION_DATABASE,
-                self::MIGRATION_DIFF,
-                self::MIGRATION_STATUS,
-                self::MIGRATION_TAG,
-                self::MIGRATION_CREATED_AT,
-                self::MIGRATION_UPDATED_AT,
+            Migration\MigrationItem::MIGRATION_ID => [
+                "autoincrement" => true,
+                "description" => "Autoincrementing integer ID",
+                "label" => "Migration ID",
+                "name" => "id",
+                "notnull" => true,
+                "type" => Types::BIGINT,
             ],
-            "table" => "migration",
+            Migration\MigrationItem::MIGRATION_CREATEDAT => [
+                "label" => "Migration Created At",
+                "description" => "Migration creation timestamp",
+                "default" => static fn (): \DateTimeImmutable => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
+                "name" => "created_at",
+                "type" => Types::DATETIMETZ_IMMUTABLE,
+            ],
+            Migration\MigrationItem::MIGRATION_DATABASE => [
+                "label" => "Migration DB",
+                "description" => "Database name migration belongs to",
+                "name" => "db",
+                "index" => true,
+                "length" => 255,
+                "notnull" => true,
+                "type" => Types::STRING,
+            ],
+            Migration\MigrationItem::MIGRATION_DIFF => [
+                "label" => "Migration Diff",
+                "description" => "Serialized object containing a schema diff",
+                "name" => "diff",
+                "convertToPhpType" => false,
+                "notnull" => true,
+                "type" => Types::BLOB,
+            ],
+            Migration\MigrationItem::MIGRATION_NAME => [
+                "label" => "Migration Name",
+                "description" => "Given name for a migration",
+                "name" => "name",
+                "notnull" => true,
+                "type" => Types::STRING,
+                "length" => 255,
+            ],
+            Migration\MigrationItem::MIGRATION_STATUS => [
+                "label" => "Migration Status",
+                "description" => "Migration status indicator",
+                "name" => "status",
+                "type" => Types::BOOLEAN,
+                "notnull" => true,
+                "default" => false,
+                "index" => true,
+            ],
+            Migration\MigrationItem::MIGRATION_TAG => [
+                "constraints" => [
+                    "unique" => true,
+                ],
+                "default" => static fn(): string => Random::generateTag(),
+                "description" => "Unique tag for a migration",
+                "index" => true,
+                "label" => "Migration Tag",
+                "name" => "tag",
+                "notnull" => true,
+                "type" => Types::STRING,
+                "length" => 255,
+            ],
+            Migration\MigrationItem::MIGRATION_UPDATEDAT => [
+                "label" => "Migration Updated At",
+                "description" => "Migration updated at timestamp",
+                "name" => "updated_at",
+                "type" => Types::DATETIMETZ_IMMUTABLE,
+            ],
+        ];
+    }
+
+    private function getSchemaTypesConfig(): array
+    {
+        return [
+            Migration\MigrationItem::class => [
+                "database" => "marshal::main",
+                "name" => "Migration",
+                "description" => "Migrations table",
+                "properties" => [
+                    Migration\MigrationItem::MIGRATION_ID,
+                    Migration\MigrationItem::MIGRATION_NAME,
+                    Migration\MigrationItem::MIGRATION_DATABASE,
+                    Migration\MigrationItem::MIGRATION_DIFF,
+                    Migration\MigrationItem::MIGRATION_STATUS,
+                    Migration\MigrationItem::MIGRATION_TAG,
+                    Migration\MigrationItem::MIGRATION_CREATEDAT,
+                    Migration\MigrationItem::MIGRATION_UPDATEDAT,
+                ],
+                "table" => "migration",
+            ],
         ];
     }
 }

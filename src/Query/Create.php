@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query;
 
-use Marshal\Database\Hydrator\TypeInputHydrator;
 use Marshal\Database\Query;
+use Marshal\Database\Query\Exception\DatabaseQueryException;
+use Marshal\Database\Query\Exception\InvalidInputException;
+use Marshal\Database\Query\Hydrator\ItemInputHydrator;
 use Marshal\Database\QueryBuilder;
 use Marshal\Database\Schema\Type;
+use Marshal\Database\Schema\TypeManager;
 
-final class Create extends Query
+class Create extends Query
 {
-    public function __construct(protected Type $type)
+    public function __construct(private Type $type)
     {
     }
 
@@ -21,14 +24,14 @@ final class Create extends Query
 
         // validate the type
         if (! $this->type->isValid(self::class)) {
-            throw new Exception\InvalidInputException($this->type->getValidationMessages());
+            throw new InvalidInputException($this->type->getValidationMessages());
         }
 
         // execute the query
         try {
             $query->executeStatement();
         } catch (\Throwable $e) {
-            throw new Exception\DatabaseQueryException($e, $query);
+            throw new DatabaseQueryException($e, $query);
         }
 
         // update the autoincrement property
@@ -39,23 +42,31 @@ final class Create extends Query
         return $this->type;
     }
 
-    public function fromInput(array $values): static
+    public static function fromArray(string $target, array $values): static
     {
-        $hydrator = new TypeInputHydrator();
-        $hydrator->hydrate($this->type, $values);
+        $type = TypeManager::get($target);
+
+        $hydrator = new ItemInputHydrator();
+        $hydrator->hydrate($type, $values);
         
-        return $this;
+        return new self($type);
     }
 
-    public function fromType(Type $type): static
+    public static function fromObject(object $target): static
     {
-        $this->type = $type;
-        return $this;
+        if (! $target instanceof Type) {
+            throw new \InvalidArgumentException(\sprintf(
+                "Invalid create object. Expected %s, given %s instead",
+                Type::class, \get_debug_type($target)
+            ));
+        }
+
+        return new self($target);
     }
 
     protected function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->createQueryBuilder();
+        $queryBuilder = $this->createQueryBuilder($this->type->getDatabase());
         $queryBuilder->insert($this->type->getTable());
         foreach ($this->type->getProperties() as $property) {
             if ($property->isAutoIncrement()) {

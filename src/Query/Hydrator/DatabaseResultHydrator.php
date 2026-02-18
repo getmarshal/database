@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Marshal\Database\Hydrator;
+namespace Marshal\Database\Query\Hydrator;
 
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Marshal\Database\Schema\Property;
@@ -15,7 +15,8 @@ final class DatabaseResultHydrator
         $data = $this->normalize($result);
         foreach ($data as $key => $value) {
             if ($type->isRelationProperty($key)) {
-                $relationType = $type->getRelation($key)->getRelationType();
+                $relation = $type->getRelation($key);
+                $relationType = $relation->getRelationType();
                 if (\is_array($value)) {
                     foreach ($value as $k => $v) {
                         if (! $relationType->hasProperty($k)) {
