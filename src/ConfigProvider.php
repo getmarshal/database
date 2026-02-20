@@ -129,6 +129,7 @@ final class ConfigProvider
                 "default" => static fn (): \DateTimeImmutable => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
                 "name" => "created_at",
                 "type" => Types::DATETIMETZ_IMMUTABLE,
+                "notnull" => true,
             ],
             Migration\MigrationItem::MIGRATION_DATABASE => [
                 "label" => "Migration DB",
@@ -190,7 +191,7 @@ final class ConfigProvider
     {
         return [
             Migration\MigrationItem::class => [
-                "database" => "marshal::main",
+                "database" => "marshal::migration",
                 "name" => "Migration",
                 "description" => "Migrations table",
                 "properties" => [

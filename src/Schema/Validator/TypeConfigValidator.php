@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Marshal\Database\Schema\Validator;
 
 use Laminas\Validator\AbstractValidator;
-use Marshal\Database\Schema\Type;
 
 class TypeConfigValidator extends AbstractValidator
 {

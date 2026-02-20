@@ -29,18 +29,18 @@ final class MigrationRepository
     public static function nameExists(string $name): bool
     {
         $migration = self::get($name);
-        return null === $migration->getType()->getAutoIncrement()->getValue() ? true : false;
+        return $migration->isEmpty() ? false : true;
     }
 
     public static function save(array $input): MigrationItem
     {
-        return Create::fromArray(MigrationItem::class, $input)
-            ->execute();
+        $type = Create::fromArray(MigrationItem::class, $input)->execute();
+        return new MigrationItem($type);
     }
 
     public static function updateMigrationOnCompletion(MigrationItem $migration): MigrationItem
     {
-        Update::target($migration)->withValues([
+        Update::target($migration->getType())->withValues([
             MigrationItem::MIGRATION_STATUS => true,
             MigrationItem::MIGRATION_UPDATEDAT => new \DateTimeImmutable(timezone: new \DateTimeZone('UTC')),
         ])->execute();

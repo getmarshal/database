@@ -11,6 +11,8 @@ use Marshal\Database\Migration\Event\GenerateMigrationEvent;
 use Marshal\Database\Migration\Event\MigrationTrait;
 use Marshal\Database\Migration\Event\RollbackMigrationEvent;
 use Marshal\Database\Migration\Event\RunMigrationEvent;
+use Marshal\Database\Migration\Event\SetupMigrationsEvent;
+use Marshal\Database\Migration\MigrationItem;
 use Marshal\Database\Schema\Type;
 use Marshal\Database\Schema\TypeManager;
 use Marshal\Utils\Config;
@@ -85,6 +87,8 @@ final class MigrationEventsListener
         $diff = $this->getMigrationDiff($migration);
         $statements = $connection->getDatabasePlatform()->getAlterSchemaSQL($diff);
 
+        // @todo create separate execute event while returning statments for confirmation of process
+
         // execute statements
         $failedStatements = [];
         $reasons = [];
@@ -110,6 +114,14 @@ final class MigrationEventsListener
                 ]);
             throw new \RuntimeException("Failed to execute one or more migration statements");
         }
+    }
+
+    public function onSetupMigrationsEvent(SetupMigrationsEvent $event): void
+    {
+        $type = TypeManager::get(MigrationItem::class);
+        $connection = DatabaseManager::getConnection(MigrationItem::class);
+        $table = $this->buildDatabaseType(new Schema(), $type);
+        $connection->createSchemaManager()->createTable($table);
     }
 
     private function buildDatabaseType(Schema $schema, Type $type): Table

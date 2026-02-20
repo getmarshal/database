@@ -275,7 +275,9 @@ final class Type
             // set input options
             $this->isRelationProperty($property->getIdentifier())
                 ? $input->setAllowEmpty(FALSE)->setRequired(TRUE)
-                : $input->setRequired($property->getNotNull());
+                : $input->setRequired($property->getNotNull())->setAllowEmpty(TRUE);
+            
+            // @todo explicitly set setAllowEmpty
 
             // append the input to theinput filter
             $inputFilter->add($input);

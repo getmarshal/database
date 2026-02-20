@@ -21,7 +21,7 @@ final class MigrationItem
     {
     }
 
-    public function getCreatedAt(): ?\DateTimeImmutable
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->type->getProperty(self::MIGRATION_CREATEDAT)->getValue();
     }

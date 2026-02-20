@@ -6,6 +6,7 @@ namespace Marshal\Database\Migration\Command;
 
 use Marshal\Database\DatabaseManager;
 use Marshal\Database\Migration\Event\SetupMigrationsEvent;
+use Marshal\Database\Migration\MigrationItem;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -31,7 +32,7 @@ final class SetupMigrationsCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $io->info("Setting up migrations...");
 
-        $connection = DatabaseManager::getConnection();
+        $connection = DatabaseManager::getConnection(MigrationItem::class);
         if ($connection->createSchemaManager()->tableExists('migration')) {
             $io->success("Migrations already setup!");
             return Command::SUCCESS;

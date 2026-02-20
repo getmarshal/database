@@ -7,6 +7,7 @@ namespace Marshal\Database;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
 use Marshal\Database\Query\Middleware\HighPerfSqlite;
+use Marshal\Database\Schema\TypeManager;
 use Marshal\Utils\Config;
 
 final class DatabaseManager
@@ -29,10 +30,30 @@ final class DatabaseManager
 
         $config = Config::get('database');
         if (! isset($config[$database])) {
-            throw new \InvalidArgumentException(\sprintf(
-                "Database connection %s not found in config",
-                $database
-            ));
+            if (! \class_exists($database)) {
+                throw new \InvalidArgumentException(\sprintf(
+                    "Database connection %s not found in config",
+                    $database
+                ));
+            }
+
+            try {
+                $type = TypeManager::get($database);
+            } catch (\Throwable $e) {
+                throw new \InvalidArgumentException(\sprintf(
+                    "Database connection %s not found in config",
+                    $database
+                ));
+            }
+
+            if (! isset($config[$type->getDatabase()])) {
+                throw new \InvalidArgumentException(\sprintf(
+                    "Database connection %s not found in config",
+                    $database
+                ));
+            }
+
+            $database = $type->getDatabase();
         }
 
         // @todo validate db config

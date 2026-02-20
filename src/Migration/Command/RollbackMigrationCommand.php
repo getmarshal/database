@@ -6,6 +6,8 @@ namespace Marshal\Database\Migration\Command;
 
 use Doctrine\DBAL\Schema\SchemaDiff;
 use Marshal\Database\DatabaseManager;
+use Marshal\Database\Migration\Event\MigrationTrait;
+use Marshal\Database\Migration\Repository\MigrationRepository;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -14,6 +16,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class RollbackMigrationCommand extends Command
 {
+    use MigrationTrait;
+
     public const string COMMAND_NAME = "migration:rollback";
 
     public function __construct()
@@ -36,29 +40,17 @@ final class RollbackMigrationCommand extends Command
 
         // get details
         $name = $input->getOption('name');
-        $connection = DatabaseManager::getConnection();
-        $queryBuilder = $connection->createQueryBuilder();
-        $migration = $queryBuilder
-            ->select('m.*')
-            ->from('migration', 'm')
-            ->where($queryBuilder->expr()->eq(
-                'm.name',
-                $queryBuilder->createNamedParameter($name)
-            ))
-            ->executeQuery()
-            ->fetchAssociative();
-        if (empty($migration)) {
+        $migration = MigrationRepository::get($name);
+        if ($migration->isEmpty()) {
             $io->error("Migration $name not found");
             return Command::FAILURE;
         }
 
-        $diff = $migration['diff'];
-        $database = $migration['db'];
-        \assert($diff instanceof SchemaDiff);
+        $diff = $this->getMigrationDiff($migration);
 
         // created tables
         foreach ($diff->getCreatedTables() as $table) {
-            // @todo delete the table
+            // @todo drop the table
         }
 
         foreach ($diff->getAlteredTables() as $tableDiff) {}

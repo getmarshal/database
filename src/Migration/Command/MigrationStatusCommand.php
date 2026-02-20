@@ -34,9 +34,9 @@ final class MigrationStatusCommand extends Command
         $io->info("Checking migration status...");
 
         try {
-            $connection = DatabaseManager::getConnection();
+            $connection = DatabaseManager::getConnection(MigrationItem::class);
         } catch (\Throwable $e) {
-            $io->success("messages");
+            $io->error($e->getMessage());
             return Command::FAILURE;
         }
 
@@ -69,7 +69,7 @@ final class MigrationStatusCommand extends Command
         }
 
         // display status table
-        $io->table(['Migration', 'Database', 'Status', 'Created', 'Executed'], $result);
+        $io->table(['Migration', 'Database', 'Status', 'Created', 'Updated'], $result);
 
         return Command::SUCCESS;
     }
