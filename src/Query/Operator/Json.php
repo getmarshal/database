@@ -12,7 +12,8 @@ class Json implements OperatorInterface
     public function __invoke(
         QueryBuilder $queryBuilder,
         Property $property,
-        string $column
+        string $column,
+        mixed $value
     ): void {
     }
 }

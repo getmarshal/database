@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query;
 
-use Marshal\Database\Query;
+use Marshal\Database\Event\Content\ContentCreatedEvent;
+use Marshal\Database\Event\Content\CreateQueryEvent;
+use Marshal\Database\QueryBuilder;
+use Marshal\Database\Hydrator\ItemInputHydrator;
 use Marshal\Database\Query\Exception\DatabaseQueryException;
 use Marshal\Database\Query\Exception\InvalidInputException;
-use Marshal\Database\Query\Hydrator\ItemInputHydrator;
-use Marshal\Database\QueryBuilder;
-use Marshal\Database\Schema\Type;
-use Marshal\Database\Schema\TypeManager;
+use Marshal\Database\Schema\Content;
+use Marshal\Database\Schema\ContentManager;
 
-class Create extends Query
+final class Create extends AbstractQuery
 {
-    public function __construct(private Type $type)
+    use Validate;
+
+    public function __construct(private Content $content)
     {
     }
 
@@ -22,53 +25,53 @@ class Create extends Query
     {
         $query = $this->prepare();
 
+        $query->getEventDispatcher()?->dispatch(new CreateQueryEvent($query, $this->content));
+
         // validate the type
-        if (! $this->type->isValid(self::class)) {
-            throw new InvalidInputException($this->type->getValidationMessages());
+        if (! $this->isValid($this->content)) {
+            throw new InvalidInputException($this->getValidationMessages());
         }
 
         // execute the query
         try {
-            $query->executeStatement();
+            $result = $query->executeStatement();
         } catch (\Throwable $e) {
             throw new DatabaseQueryException($e, $query);
         }
 
-        // update the autoincrement property
-        $this->type->getAutoIncrement()->setValue(
-            \intval($query->lastInsertId())
-        );
-        
-        return $this->type;
+        if (\intval($result) > 0) {
+            // update the autoincrement property
+            $this->content->getAutoIncrement()->setValue(
+                \intval($query->lastInsertId())
+            );
+
+            $query->getEventDispatcher()?->dispatch(new ContentCreatedEvent($this->content));
+        }
+
+        return $this->content;
     }
 
     public static function fromArray(string $target, array $values): static
     {
-        $type = TypeManager::get($target);
+        $content = ContentManager::get($target);
 
         $hydrator = new ItemInputHydrator();
-        $hydrator->hydrate($type, $values);
-        
-        return new self($type);
+        $hydrator->hydrate($content, $values);
+
+        return new self($content);
     }
 
-    public static function fromObject(object $target): static
+    public static function target(Content $target): object
     {
-        if (! $target instanceof Type) {
-            throw new \InvalidArgumentException(\sprintf(
-                "Invalid create object. Expected %s, given %s instead",
-                Type::class, \get_debug_type($target)
-            ));
-        }
-
-        return new self($target);
+        $create = new self($target);
+        return $create->execute();
     }
 
     protected function prepare(): QueryBuilder
     {
-        $queryBuilder = $this->createQueryBuilder($this->type->getDatabase());
-        $queryBuilder->insert($this->type->getTable());
-        foreach ($this->type->getProperties() as $property) {
+        $queryBuilder = $this->createQueryBuilder($this->content->getContentConfig()->getDatabase());
+        $queryBuilder->insert($this->content->getContentConfig()->getTable());
+        foreach ($this->content->getProperties() as $property) {
             if ($property->isAutoIncrement()) {
                 continue;
             }

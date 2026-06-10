@@ -4,34 +4,23 @@ declare(strict_types=1);
 
 namespace Marshal\Database\Query;
 
-use Marshal\Database\Query;
-use Marshal\Database\Query\Exception\InvalidInputException;
-use Marshal\Database\Query\Hydrator\ItemInputHydrator;
+use Marshal\Database\Event\Content\ContentUpdatedEvent;
+use Marshal\Database\Event\Content\UpdateQueryEvent;
+use Marshal\Database\Query\Modifier\Set;
+use Marshal\Database\Query\Modifier\Where;
 use Marshal\Database\QueryBuilder;
-use Marshal\Database\Query\Trait\ValuesTrait;
-use Marshal\Database\Query\Trait\WhereTrait;
-use Marshal\Database\Schema\Type;
+use Marshal\Database\Hydrator\ItemInputHydrator;
+use Marshal\Database\Schema\Content;
 use Marshal\Utils\Logger\LoggerManager;
 
-class Update extends Query
+class Update extends AbstractQuery
 {
-    use ValuesTrait;
-    use WhereTrait;
+    use Set;
+    use Validate;
+    use Where;
 
-    public function __construct(private Type $type)
+    public function __construct(private Content $content)
     {
-    }
-
-    public static function target(object $target): static
-    {
-        if (! $target instanceof Type) {
-            throw new \InvalidArgumentException(\sprintf(
-                "Invalid update query. Expected object of type %s, given %s instead",
-                Type::class, \get_debug_type($target)
-            ));
-        }
-
-        return new self($target);
     }
 
     public function execute(): int|string
@@ -40,12 +29,27 @@ class Update extends Query
         $query = $this->prepare();
 
         // validate properties being updated
-        $this->type->setValidationGroup($this->values);
-        if (! $this->type->isValid(self::class)) {
-            throw new InvalidInputException($this->type->getValidationMessages());
+        $this->setValidationGroup(\array_keys($this->values));
+        if (! $this->isValid($this->content)) {
+            throw new Exception\InvalidInputException($this->getValidationMessages());
         }
-        
-        return $query->executeStatement();
+
+        $query->getEventDispatcher()?->dispatch(new UpdateQueryEvent($query, $this->content, $this->values));
+
+        try {
+            $result = $query->executeStatement();
+        } catch (\Throwable $e) {
+            throw new Exception\UpdateQueryException($query, $this->content, $e);
+        }
+
+        $query->getEventDispatcher()?->dispatch(new ContentUpdatedEvent($this->content, $this->values));
+
+        return $result;
+    }
+
+    public static function target(Content $target): static
+    {
+        return new self($target);
     }
 
     protected function prepare(): QueryBuilder
@@ -54,24 +58,24 @@ class Update extends Query
             throw new \RuntimeException("No values to update");
         }
 
-        $queryBuilder = $this->createQueryBuilder($this->type->getDatabase());
-        $queryBuilder->update($this->type->getTable());
-        $this->applyWhereExpressions($queryBuilder, $this->type);
+        $queryBuilder = $this->createQueryBuilder($this->content->getContentConfig()->getDatabase());
+        $queryBuilder->update($this->content->getContentConfig()->getTable());
+        $this->applyWhereExpressions($queryBuilder, $this->content);
 
         // hydrate the type
         $hydrator = new ItemInputHydrator();
-        $hydrator->hydrate($this->type, $this->values);
+        $hydrator->hydrate($this->content, $this->values);
 
-        foreach ($this->values as $name => $value) {
-            if (! $this->type->hasProperty($name)) {
+        foreach (\array_keys($this->values) as $name) {
+            if (! $this->content->hasProperty($name)) {
                 LoggerManager::get()->warning(\sprintf(
                     "Property %s not found on update type %s",
-                    $name, $this->type->getIdentifier()
+                    $name, $this->content->getSchemaIdentifier()
                 ));
                 continue;
             }
 
-            $property = $this->type->getProperty($name);
+            $property = $this->content->getProperty($name);
             $queryBuilder->set(
                 $property->getName(),
                 $queryBuilder->createNamedParameter(
@@ -82,9 +86,9 @@ class Update extends Query
         }
 
         $queryBuilder->andWhere($queryBuilder->expr()->eq(
-            $this->type->getAutoIncrement()->getName(),
+            $this->content->getAutoIncrement()->getName(),
             $queryBuilder->createNamedParameter(
-                $this->type->getAutoIncrement()->getValue()
+                $this->content->getAutoIncrement()->getValue()
             )
         ));
 

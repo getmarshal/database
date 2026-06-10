@@ -7,7 +7,7 @@ namespace Marshal\Database\Schema;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Types\Type as DBALType;
 
-class Property
+final class Property
 {
     private bool $autoIncrement = false;
     /**
@@ -46,19 +46,12 @@ class Property
     public function convertToDatabaseValue(AbstractPlatform $databasePlatform): mixed
     {
         $value = $this->value;
-        if ($value instanceof Type) {
+        if ($value instanceof Content) {
             $value = $value->getAutoIncrement()->getValue();
         }
 
         if ($this->typeName === 'bigint' && \is_array($value) && isset($value['id'])) {
             $value = \intval($value['id']);
-        }
-
-        if (\is_object($value) && \method_exists($value, 'getType')) {
-            $type = $value->getType();
-            if ($type instanceof Type) {
-                $value = $type->getAutoIncrement()->getValue();
-            }
         }
 
         return $this->getDatabaseType()->convertToDatabaseValue($value, $databasePlatform);

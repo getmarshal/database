@@ -6,13 +6,15 @@ namespace Marshal\Database;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
-use Marshal\Database\Query\Middleware\HighPerfSqlite;
-use Marshal\Database\Schema\TypeManager;
+use Marshal\Database\Middleware\HighPerfSqlite;
+use Marshal\Database\Schema\ContentManager;
 use Marshal\Utils\Config;
+use Psr\EventDispatcher\EventDispatcherInterface;
 
 final class DatabaseManager
 {
     private static array $connections = [];
+    private static ?EventDispatcherInterface $eventDispatcher = null;
 
     private function __construct()
     {
@@ -38,7 +40,7 @@ final class DatabaseManager
             }
 
             try {
-                $type = TypeManager::get($database);
+                $content = ContentManager::get($database);
             } catch (\Throwable $e) {
                 throw new \InvalidArgumentException(\sprintf(
                     "Database connection %s not found in config",
@@ -46,14 +48,14 @@ final class DatabaseManager
                 ));
             }
 
-            if (! isset($config[$type->getDatabase()])) {
+            if (! isset($config[$content->getContentConfig()->getDatabase()])) {
                 throw new \InvalidArgumentException(\sprintf(
                     "Database connection %s not found in config",
                     $database
                 ));
             }
 
-            $database = $type->getDatabase();
+            $database = $content->getContentConfig()->getDatabase();
         }
 
         // @todo validate db config
@@ -74,13 +76,16 @@ final class DatabaseManager
         $dbalConfig->setMiddlewares($middlewares);
 
         // wrap the connection
-        if (! isset($config[$database]["wrapperClass"])) {
-            $config[$database]["wrapperClass"] = Connection::class;
-        }
-        
+        $config[$database]["wrapperClass"] = Connection::class;
+
         // get the connection
         $connection = DriverManager::getConnection($config[$database], $dbalConfig);
-        
+        \assert($connection instanceof Connection);
+
+        if (null !== self::$eventDispatcher) {
+            $connection->setEventDispatcher(self::$eventDispatcher);
+        }
+
         // @todo put pragma settings in config and allow override defaults
         // @todo wrap these in DBAL Driver middleware
         if (true === $firstConnect) {
@@ -95,5 +100,10 @@ final class DatabaseManager
         self::$connections[$database] = $connection;
 
         return $connection;
+    }
+
+    public static function setEventDispatcher(EventDispatcherInterface $eventDispatcher): void
+    {
+        self::$eventDispatcher = $eventDispatcher;
     }
 }
